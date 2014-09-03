@@ -15,6 +15,7 @@
 
 #include "client.h"
 #include "rpc-clnt.h"
+#include "rpcsvc.h"
 
 int
 client_cbk_null (struct rpc_clnt *rpc, void *mydata, void *data)
@@ -40,10 +41,28 @@ client_cbk_ino_flush (struct rpc_clnt *rpc, void *mydata, void *data)
         return 0;
 }
 
-rpcclnt_cb_actor_t gluster_cbk_actors[GF_CBK_MAXVALUE] = {
+int     
+client_cbk_upcall (struct rpc_clnt *rpc, void *mydata, void *data)
+{       
+        int ret = -1;
+        quad_t ia_ino;
+        struct iovec *  iov  = NULL;
+
+        gf_log (THIS->name, GF_LOG_WARNING,
+                "Upcall callback is being called!!!");
+        iov = (struct iovec*)data;
+
+        ret =  xdr_to_generic (*iov, &ia_ino,
+                                (xdrproc_t)xdr_gf_upcall);
+        gf_log (THIS->name, GF_LOG_WARNING, "Upcall Inode = %d, ret = %d", (int)ia_ino, ret); 
+        return 0;
+}
+
+rpcclnt_cb_actor_t gluster_cbk_actors[] = {
         [GF_CBK_NULL]      = {"NULL",      GF_CBK_NULL,      client_cbk_null },
         [GF_CBK_FETCHSPEC] = {"FETCHSPEC", GF_CBK_FETCHSPEC, client_cbk_fetchspec },
         [GF_CBK_INO_FLUSH] = {"INO_FLUSH", GF_CBK_INO_FLUSH, client_cbk_ino_flush },
+        [GF_CBK_UPCALL]    = {"UPCALL",    GF_CBK_UPCALL,    client_cbk_upcall },
 };
 
 

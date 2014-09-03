@@ -26,6 +26,13 @@
 #include "defaults.h"
 #include "authenticate.h"
 
+rpcsvc_cbk_program_t server_cbk_prog = {
+        .progname  = "Gluster Callback",
+        .prognum   = GLUSTER_CBK_PROGRAM,
+        .progver   = GLUSTER_CBK_VERSION,
+};
+
+
 void
 grace_time_handler (void *data)
 {
@@ -1037,16 +1044,35 @@ notify (xlator_t *this, int32_t event, void *data, ...)
 {
         int          ret = 0;
         int32_t      val = 0;
-        dict_t      *dict = NULL;
+/*        dict_t      *dict = NULL;
         dict_t      *output = NULL;
-        va_list      ap;
+        va_list      ap;*/
+        server_conf_t    *conf = NULL;
+        rpc_transport_t  *xprt = NULL;
+        quad_t *ia_ino = NULL;
 
-        dict = data;
+/*        dict = data;
         va_start (ap, data);
         output = va_arg (ap, dict_t*);
-        va_end (ap);
+        va_end (ap);*/
 
+        conf = this->private;
         switch (event) {
+        case GF_EVENT_UPCALL:
+                
+                gf_log (this->name, GF_LOG_INFO, "Upcall Notify event = %d",
+                        event);
+                if (data) {
+                        gf_log (this->name, GF_LOG_INFO, "Upcall - received data");
+                        ia_ino = data;
+                        list_for_each_entry (xprt, &conf->xprt_list, list) {
+                                rpcsvc_request_submit(conf->rpc, xprt,
+                                               &server_cbk_prog, GF_CBK_UPCALL,
+                                               ia_ino, this->ctx,
+                                               (xdrproc_t)xdr_gf_upcall);
+                        }
+                }
+                break;
         default:
                 default_notify (this, event, data);
                 break;

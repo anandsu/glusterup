@@ -24,6 +24,7 @@
 #include "compat-errno.h"
 
 #include "xdr-nfs3.h"
+#include "defaults.h"
 
 #define SERVER_REQ_SET_ERROR(req, ret)                          \
         do {                                                    \
@@ -1386,6 +1387,11 @@ out:
 
         return 0;
 }
+rpcsvc_cbk_program_t glust_cbk_prog = {
+        .progname  = "Gluster Callback",
+        .prognum   = GLUSTER_CBK_PROGRAM,
+        .progver   = GLUSTER_CBK_VERSION,
+};
 
 int
 server_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
@@ -1395,6 +1401,10 @@ server_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         gfs3_write_rsp       rsp   = {0,};
         server_state_t      *state = NULL;
         rpcsvc_request_t    *req   = NULL;
+        server_conf_t    *conf = NULL;
+        rpc_transport_t  *xprt = NULL;
+
+	conf = frame->this->private;
 
         GF_PROTOCOL_DICT_SERIALIZE (this, xdata, &rsp.xdata.xdata_val,
                                     rsp.xdata.xdata_len, op_errno, out);
@@ -1407,6 +1417,20 @@ server_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                          uuid_utoa (state->resolve.gfid), strerror (op_errno));
                 goto out;
         }
+/* list all the client protocol connecting to this process */
+/*pthread_mutex_lock (&conf->mutex);
+{
+        list_for_each_entry (xprt, &conf->xprt_list, list) {
+                gf_log ("Poornima: mount-point-list", GF_LOG_ERROR,
+                       "%s", xprt->peerinfo.identifier);
+		rpcsvc_callback_submit(conf->rpc, xprt,
+                                                &glust_cbk_prog,
+                                                GF_CBK_UPCALL, NULL, 0);
+        }
+}
+pthread_mutex_unlock (&conf->mutex);*/
+        gf_log (this->name, GF_LOG_INFO, "Upcall server_writev_cbk - Inode = %d", (int)prebuf->ia_ino);
+        this->notify (this, GF_EVENT_UPCALL, &prebuf->ia_ino);
 
         gf_stat_from_iatt (&rsp.prestat, prebuf);
         gf_stat_from_iatt (&rsp.poststat, postbuf);

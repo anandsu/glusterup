@@ -546,6 +546,7 @@ typedef enum {
         GF_EVENT_PARENT_DOWN,
         GF_EVENT_VOLUME_BARRIER_OP,
         GF_EVENT_MAXVAL,
+        GF_EVENT_UPCALL,
 } glusterfs_event_t;
 
 struct gf_flock {
