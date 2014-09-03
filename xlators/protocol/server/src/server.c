@@ -1049,7 +1049,7 @@ notify (xlator_t *this, int32_t event, void *data, ...)
         va_list      ap;*/
         server_conf_t    *conf = NULL;
         rpc_transport_t  *xprt = NULL;
-        quad_t *ia_ino = NULL;
+        gfs3_upcall_req up_req;
 
 /*        dict = data;
         va_start (ap, data);
@@ -1064,12 +1064,12 @@ notify (xlator_t *this, int32_t event, void *data, ...)
                         event);
                 if (data) {
                         gf_log (this->name, GF_LOG_INFO, "Upcall - received data");
-                        ia_ino = data;
+                        up_req.ia_inode = *((quad_t *)data);
                         list_for_each_entry (xprt, &conf->xprt_list, list) {
                                 rpcsvc_request_submit(conf->rpc, xprt,
                                                &server_cbk_prog, GF_CBK_UPCALL,
-                                               ia_ino, this->ctx,
-                                               (xdrproc_t)xdr_gf_upcall);
+                                               &up_req, this->ctx,
+                                               (xdrproc_t) xdr_gfs3_upcall_req);
                         }
                 }
                 break;

@@ -46,15 +46,16 @@ client_cbk_upcall (struct rpc_clnt *rpc, void *mydata, void *data)
 {       
         int ret = -1;
         quad_t ia_ino;
+        gfs3_upcall_req up_req;
         struct iovec *  iov  = NULL;
 
         gf_log (THIS->name, GF_LOG_WARNING,
                 "Upcall callback is being called!!!");
         iov = (struct iovec*)data;
 
-        ret =  xdr_to_generic (*iov, &ia_ino,
-                                (xdrproc_t)xdr_gf_upcall);
-        gf_log (THIS->name, GF_LOG_WARNING, "Upcall Inode = %d, ret = %d", (int)ia_ino, ret); 
+        ret =  xdr_to_generic (*iov, &up_req,
+                                (xdrproc_t)xdr_gfs3_upcall_req);
+        gf_log (THIS->name, GF_LOG_WARNING, "Upcall Inode = %d, ret = %d", (int)(up_req.ia_inode), ret); 
         return 0;
 }
 
