@@ -148,6 +148,8 @@ AC_CONFIG_FILES([Makefile
                 xlators/features/snapview-server/src/Makefile
                 xlators/features/snapview-client/Makefile
                 xlators/features/snapview-client/src/Makefile
+		xlators/features/proto-locks/Makefile
+		xlators/features/proto-locks/src/Makefile
                 xlators/playground/Makefile
                 xlators/playground/template/Makefile
                 xlators/playground/template/src/Makefile
