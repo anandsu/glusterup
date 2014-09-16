@@ -19,4 +19,4 @@ uninstall-local:
 	rm -f $(DESTDIR)$(xlatordir)/upcalls.so
 
 install-data-hook:
-	ln -sf locks.so $(DESTDIR)$(xlatordir)/upcalls.so
+	ln -sf upcalls.so $(DESTDIR)$(xlatordir)/upcalls.so
