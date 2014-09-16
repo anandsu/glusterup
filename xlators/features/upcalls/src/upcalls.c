@@ -106,6 +106,9 @@ struct xlator_fops fops = {
         .open        = up_open,
 };
 
+struct xlator_cbks cbks = {
+};
+
 struct volume_options options[] = {
         { .key = {NULL} },
 };
