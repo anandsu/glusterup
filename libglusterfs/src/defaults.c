@@ -2287,16 +2287,18 @@ default_notify (xlator_t *this, int32_t event, void *data, ...)
                 }
         }
         break;
-/*        case GF_EVENT_UPCALL:
-        {       // This case may not be required 
-                xlator_list_t *parent = this->parents;
+        case GF_EVENT_UPCALL:
+        {       // This case may not be required
+                if (this->ctx && this->ctx->master) 
+                        xlator_notify (this->ctx->master, event, data, NULL);
+/*                xlator_list_t *parent = this->parents;
                 while (parent) {
                         if (parent->xlator->init_succeeded)
                                 xlator_notify (parent->xlator, event,
                                                data, NULL);
                         parent = parent->next;
-                }
-        }*/
+                }*/
+        }
         break;
         default:
         {

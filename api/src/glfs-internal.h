@@ -226,4 +226,5 @@ int glfs_getxattr_process (void *value, size_t size, dict_t *xattr,
 /* Sends RPC call to glusterd to fetch required volume info */
 int glfs_get_volume_info (struct glfs *fs);
 
+void glfs_upcall ();
 #endif /* !_GLFS_INTERNAL_H */
