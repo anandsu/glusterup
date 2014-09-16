@@ -61,6 +61,25 @@ up_open (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
         return 0;
 }
 
+int32_t
+mem_acct_init (xlator_t *this)
+{
+        int     ret = -1;
+
+        if (!this)
+                return ret;
+
+        ret = xlator_mem_acct_init (this, gf_upcalls_mt_end + 1);
+
+        if (ret != 0) {
+                gf_log (this->name, GF_LOG_WARNING, "Memory accounting"
+                        " init failed");
+                return ret;
+        }
+
+        return ret;
+}
+
 int
 init (xlator_t *this)
 {
