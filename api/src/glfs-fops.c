@@ -16,6 +16,7 @@
 #include "glfs.h"
 #include "compat-errno.h"
 #include <limits.h>
+#include "glusterfs3.h"
 
 #ifdef NAME_MAX
 #define GF_NAME_MAX NAME_MAX
@@ -24,6 +25,25 @@
 #endif
 
 #define READDIRBUF_SIZE (sizeof(struct dirent) + GF_NAME_MAX + 1)
+
+void
+glfs_upcall (void *data)
+{
+        int ret = -1;
+        quad_t ia_ino;
+        gfs3_upcall_req up_req;
+        struct iovec *  iov  = NULL;
+
+        gf_log (THIS->name, GF_LOG_WARNING,
+                "Upcall gfapi callback is being called!!!");
+        iov = (struct iovec*)data;
+
+        ret =  xdr_to_generic (*iov, &up_req,
+                                (xdrproc_t)xdr_gfs3_upcall_req);
+        gf_log (THIS->name, GF_LOG_WARNING, "Upcall gfapi Inode = %d, ret = %d", (int)(up_req.ia_inode), ret); 
+//        gf_log (THIS->name, GF_LOG_WARNING, "Upcall - in glfs_upcall");
+        return;
+}
 
 int
 glfs_loc_link (loc_t *loc, struct iatt *iatt)
