@@ -14,9 +14,3 @@ AM_CPPFLAGS = $(GF_CPPFLAGS) -I$(top_srcdir)/libglusterfs/src
 AM_CFLAGS = -Wall -fno-strict-aliasing $(GF_CFLAGS)
 
 CLEANFILES = 
-
-uninstall-local:
-	rm -f $(DESTDIR)$(xlatordir)/upcalls.so
-
-install-data-hook:
-	ln -sf upcalls.so $(DESTDIR)$(xlatordir)/upcalls.so
