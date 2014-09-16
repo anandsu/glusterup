@@ -27,6 +27,8 @@
 #include "statedump.h"
 #include "syncop.h"
 
+#include "upcalls.h"
+
 #ifndef LLONG_MAX
 #define LLONG_MAX LONG_LONG_MAX /* compat with old gcc */
 #endif /* LLONG_MAX */
@@ -66,7 +68,7 @@ init (xlator_t *this)
 
         priv = GF_CALLOC (1, sizeof (*priv),
                           gf_upcalls_mt_private_t);
-	if !(priv) {
+	if (!priv) {
 		ret = -1;
 		gf_log (this->name, GF_LOG_ERROR,
 			"Error allocating private struct in xlator init");

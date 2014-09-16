@@ -23,6 +23,9 @@
 
 #include "lkowner.h"
 
-
+struct _upcalls_private_t {
+	int client_id;
+};
+typedef struct _upcalls_private_t upcalls_private_t;
 
 #endif /* __UPCALLS_INFRA_H__ */
