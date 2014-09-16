@@ -58,6 +58,48 @@ up_open (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
         return 0;
 }
 
+int
+init (xlator_t *this)
+{
+	int			ret	= -1;
+        upcalls_private_t	*priv	= NULL;
+
+        priv = GF_CALLOC (1, sizeof (*priv),
+                          gf_upcalls_mt_private_t);
+	if !(priv) {
+		ret = -1;
+		gf_log (this->name, GF_LOG_ERROR,
+			"Error allocating private struct in xlator init");
+		goto out;
+	}
+
+	this->private = priv;
+	ret = 0;
+
+out:
+	if (ret) {
+		GF_FREE (priv);
+	}
+
+	return ret;
+}
+
+int
+fini (xlator_t *this)
+{
+	upcalls_private_t *priv = NULL;
+
+	priv = this->private;
+	if (!priv) {
+		return 0;
+	}
+	this->private = NULL;
+	GF_FREE (priv);
+
+	return 0;
+}
+
+
 struct xlator_fops fops = {
         .open        = up_open,
 };
@@ -65,5 +107,3 @@ struct xlator_fops fops = {
 struct volume_options options[] = {
         { .key = {NULL} },
 };
-
-
