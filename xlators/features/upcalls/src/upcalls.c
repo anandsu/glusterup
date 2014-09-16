@@ -28,6 +28,7 @@
 #include "syncop.h"
 
 #include "upcalls.h"
+#include "upcalls-mem-types.h"
 
 #ifndef LLONG_MAX
 #define LLONG_MAX LONG_LONG_MAX /* compat with old gcc */
