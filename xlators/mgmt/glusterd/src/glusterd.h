@@ -932,7 +932,7 @@ int glusterd_op_create_volume (dict_t *dict, char **op_errstr);
 int glusterd_op_start_volume (dict_t *dict, char **op_errstr);
 int glusterd_op_stop_volume (dict_t *dict);
 int glusterd_op_delete_volume (dict_t *dict);
-
+int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr);
 int glusterd_op_add_brick (dict_t *dict, char **op_errstr);
 int glusterd_op_remove_brick (dict_t *dict, char **op_errstr);
 int glusterd_op_stage_add_brick (dict_t *dict, char **op_errstr,
@@ -965,7 +965,6 @@ int glusterd_op_gsync_args_get (dict_t *dict, char **op_errstr,
 
 int glusterd_start_volume (glusterd_volinfo_t *volinfo, int flags,
                            gf_boolean_t wait);
-
 int glusterd_stop_volume (glusterd_volinfo_t *volinfo);
 
 /* Synctask part */

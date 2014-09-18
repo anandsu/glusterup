@@ -438,6 +438,37 @@ out:
         return ret;
 }
 
+
+/*int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr)
+{
+        GF_ASSERT(dict);
+        GF_ASSERT(op_errstr);
+       gf_asprintf(op_errstr, "ganesha volume failed");
+       return -1;
+}
+*/
+
+
+
+static int
+glusterd_check_ganesha_cmd (char *key, char *value, char **errstr, dict_t *dict)
+{
+        int                ret = -1;
+        gf_boolean_t       b   = _gf_false;
+        gf_log("",GF_LOG_INFO, "entering ganesha_check_cmd");
+        gf_log ("", GF_LOG_INFO,"key is %s", key);
+        if ((strcmp (key, "ganesha.enable") == 0) ||
+           (strcmp (key, "features.ganesha") == 0)) {
+                gf_log ("", GF_LOG_INFO,"ganesha command found");
+                ret = gf_string2boolean (value, &b);
+                ret = glusterd_handle_ganesha_op(dict,errstr);
+
+
+        }
+        return ret;
+}
+
+
 int
 glusterd_brick_op_build_payload (glusterd_op_t op, glusterd_brickinfo_t *brickinfo,
                                  gd1_mgmt_brick_op_req **req, dict_t *dict)
@@ -1903,7 +1934,7 @@ out:
 }
 
 static int
-glusterd_op_set_volume (dict_t *dict)
+glusterd_op_set_volume (dict_t *dict, char **errstr)
 {
         int                                      ret = 0;
         glusterd_volinfo_t                      *volinfo = NULL;
@@ -2018,6 +2049,16 @@ glusterd_op_set_volume (dict_t *dict)
                                 goto out;
                         }
                 }
+                 if ((strncmp (key, "ganesha",7) == 0) ||
+                (strcmp (key, "features.ganesha") == 0)) {
+                ret =  glusterd_check_ganesha_cmd(key,value,errstr,dict);
+                if ( ret == -1)
+                        {
+                                ret = -1;
+                                goto out;
+                }
+                 }
+
 
                 if (!is_key_glusterd_hooks_friendly (key)) {
                         ret = glusterd_check_option_exists (key, &key_fixed);
@@ -4915,7 +4956,7 @@ glusterd_op_commit_perform (glusterd_op_t op, dict_t *dict, char **op_errstr,
                         break;
 
                 case GD_OP_SET_VOLUME:
-                        ret = glusterd_op_set_volume (dict);
+                        ret = glusterd_op_set_volume (dict, op_errstr);
                         break;
 
                 case GD_OP_RESET_VOLUME:

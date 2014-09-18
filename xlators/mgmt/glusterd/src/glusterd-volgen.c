@@ -2747,6 +2747,7 @@ client_graph_builder (volgen_graph_t *graph, glusterd_volinfo_t *volinfo,
                         goto out;
         }
 
+
         ret = glusterd_volinfo_get_boolean (volinfo, "features.encryption");
         if (ret == -1)
                 goto out;
@@ -2903,6 +2904,18 @@ client_graph_builder (volgen_graph_t *graph, glusterd_volinfo_t *volinfo,
         xl = volgen_graph_add_as (graph, "debug/io-stats", volname);
         if (!xl)
                 goto out;
+         ret = dict_get_str_boolean (set_dict, "features.ganesha", 0);
+
+        if (ret == -1)
+                goto out;
+        if (ret) {
+                xl = volgen_graph_add (graph, "features/ganesha", volname);
+
+                if (!xl) {
+                        ret = -1;
+                        goto out;
+                }
+
 
         ret = volgen_graph_set_options_generic (graph, set_dict, "client",
                                                 &loglevel_option_handler);
@@ -2941,6 +2954,9 @@ client_graph_builder (volgen_graph_t *graph, glusterd_volinfo_t *volinfo,
         if (ret)
                 gf_log (this->name, GF_LOG_WARNING, "Failed to change "
                         "log-flush-timeout option");
+        }
+
+
 
 out:
         return ret;

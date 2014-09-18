@@ -169,6 +169,8 @@ AC_CONFIG_FILES([Makefile
                 xlators/mgmt/Makefile
                 xlators/mgmt/glusterd/Makefile
                 xlators/mgmt/glusterd/src/Makefile
+                xlators/features/ganesha/Makefile
+                xlators/features/ganesha/src/Makefile
                 cli/Makefile
                 cli/src/Makefile
                 doc/Makefile
