@@ -61,6 +61,29 @@ up_open (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
         return 0;
 }
 
+
+int
+up_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
+                int op_ret, int op_errno, struct iatt *prebuf,
+                struct iatt *postbuf, dict_t *xdata)
+{
+        STACK_UNWIND_STRICT (writev, frame, op_ret, op_errno, prebuf, postbuf, xdata);
+        return 0;
+}
+
+
+int
+up_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
+            struct iovec *vector, int count, off_t off, uint32_t flags,
+            struct iobref *iobref, dict_t *xdata)
+{
+        STACK_WIND (frame, up_writev_cbk,
+                    FIRST_CHILD(this), FIRST_CHILD(this)->fops->writev,
+                    fd, vector, count, off, flags, iobref, xdata);
+
+        return 0;
+}
+
 int32_t
 mem_acct_init (xlator_t *this)
 {
@@ -124,6 +147,7 @@ fini (xlator_t *this)
 
 struct xlator_fops fops = {
         .open        = up_open,
+        .writev      = up_writev,
 };
 
 struct xlator_cbks cbks = {
