@@ -1429,8 +1429,8 @@ server_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         }
 }
 pthread_mutex_unlock (&conf->mutex);*/
-        gf_log (this->name, GF_LOG_INFO, "Upcall server_writev_cbk - Inode = %d", (int)prebuf->ia_ino);
-        this->notify (this, GF_EVENT_UPCALL, &prebuf->ia_ino);
+//        gf_log (this->name, GF_LOG_INFO, "Upcall server_writev_cbk - gfid = %s", (char *)postbuf->ia_gfid);
+        this->notify (this, GF_EVENT_UPCALL, &postbuf->ia_gfid);
 
         gf_stat_from_iatt (&rsp.prestat, prebuf);
         gf_stat_from_iatt (&rsp.poststat, postbuf);

@@ -1525,3 +1525,72 @@ out:
 
         return ret;
 }
+
+int
+glfs_h_upcall (struct glfs *fs, void * data)
+{
+        struct callback_arg * cbk = (struct callback_arg *)data; 
+        struct glfs_object *glhandle = NULL;
+        uuid_t gfid;
+        upcall_list *u_list = NULL;
+        xlator_t           *subvol = NULL;
+        inode_t *newinode;
+        int found = 0;
+
+        if (!fs) 
+                goto out;
+
+        __glfs_entry_fs (fs);
+
+        /* get the active volume */
+        subvol = glfs_active_subvol (fs);
+
+        if ( !subvol ) {
+                //ret = -1;
+                errno = EIO;
+                goto out;
+        }
+
+        pthread_mutex_lock (&u_mutex);
+        list_for_each_entry (u_list, &u_root.upcall_entries, upcall_entries) {
+                uuid_copy (gfid, u_list->gfid);
+                gf_log (subvol->name, GF_LOG_WARNING, "In list");
+                if ((newinode = inode_find (subvol->itable, gfid))) {
+                        gf_log (subvol->name, GF_LOG_WARNING, "found");
+                        found = 1;
+                        break;
+                }
+        }
+        if (found) {
+                //found entry for this volume 
+                glhandle = GF_CALLOC (1, sizeof(struct glfs_object),
+                                      glfs_mt_glfs_object_t);
+                if (glhandle == NULL) {
+                        errno = ENOMEM;
+//                                ret = -1;
+                        pthread_mutex_unlock (&u_mutex);
+                        goto out;
+                }
+
+                glhandle->inode = newinode;
+                uuid_copy (glhandle->gfid, gfid);
+                list_del_init (&u_list->upcall_entries);
+                GF_FREE (u_list);
+        }
+
+        pthread_mutex_unlock (&u_mutex);
+
+        // for now will return root handle
+//        glhandle = glfs_h_lookupat(cbk->gl_fs, NULL, "/", cbk->buf);
+
+        cbk->glhandle = glhandle;
+        *cbk->reason = INODE_UPDATE;
+        *cbk->flags = UP_SIZE;
+//        cbk->expire_time_attr = time(NULL); 
+        glfs_subvol_done (fs, subvol);
+
+        return 0;
+out:
+        glfs_subvol_done (fs, subvol);
+        return -1;
+}

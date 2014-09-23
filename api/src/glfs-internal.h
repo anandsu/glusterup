@@ -127,6 +127,29 @@ struct glfs_object {
         uuid_t          gfid;
 };
 
+struct callback_arg
+{
+        struct glfs *gl_fs;       
+        int *reason;
+        struct glfs_object *glhandle;
+        int *flags;
+        struct stat *buf;
+        uint32_t *expire_attr;
+};
+
+// have to make "fs" specific
+struct _upcall_list {
+        struct list_head upcall_entries;
+        uuid_t gfid;
+        //flags
+        //deleg_type
+//        struct upcall_list *next;
+};
+typedef struct _upcall_list upcall_list;
+
+upcall_list u_root;
+pthread_mutex_t     u_mutex; /* mutex for upcall_list */
+
 #define DEFAULT_EVENT_POOL_SIZE           16384
 #define GF_MEMPOOL_COUNT_OF_DICT_T        4096
 #define GF_MEMPOOL_COUNT_OF_DATA_T        (GF_MEMPOOL_COUNT_OF_DICT_T * 4)

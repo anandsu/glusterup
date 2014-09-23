@@ -1059,12 +1059,13 @@ notify (xlator_t *this, int32_t event, void *data, ...)
         conf = this->private;
         switch (event) {
         case GF_EVENT_UPCALL:
-                
+        {        
                 gf_log (this->name, GF_LOG_INFO, "Upcall Notify event = %d",
                         event);
                 if (data) {
                         gf_log (this->name, GF_LOG_INFO, "Upcall - received data");
-                        up_req.ia_inode = *((quad_t *)data);
+                        memcpy(up_req.gfid, (char *)data, 16);
+                        //uuid_copy (up_req.gfid, (uuid_t *)data);
                         list_for_each_entry (xprt, &conf->xprt_list, list) {
                                 rpcsvc_request_submit(conf->rpc, xprt,
                                                &server_cbk_prog, GF_CBK_UPCALL,
@@ -1073,6 +1074,7 @@ notify (xlator_t *this, int32_t event, void *data, ...)
                         }
                 }
                 break;
+        }
         default:
                 default_notify (this, event, data);
                 break;

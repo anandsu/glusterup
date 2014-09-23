@@ -16,6 +16,7 @@
 #include "client.h"
 #include "rpc-clnt.h"
 #include "rpcsvc.h"
+#include "defaults.h"
 
 int
 client_cbk_null (struct rpc_clnt *rpc, void *mydata, void *data)
@@ -55,7 +56,7 @@ client_cbk_upcall (struct rpc_clnt *rpc, void *mydata, void *data)
 
         ret =  xdr_to_generic (*iov, &up_req,
                                 (xdrproc_t)xdr_gfs3_upcall_req);
-        gf_log (THIS->name, GF_LOG_WARNING, "Upcall Inode = %d, ret = %d", (int)(up_req.ia_inode), ret); 
+        gf_log (THIS->name, GF_LOG_WARNING, "Upcall gfid = %s, ret = %d", (char *)(up_req.gfid), ret); 
 //        glfs_upcall();
         default_notify (THIS, GF_EVENT_UPCALL, data); 
         return 0;

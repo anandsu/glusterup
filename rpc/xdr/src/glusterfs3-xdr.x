@@ -263,7 +263,7 @@ struct   gfs3_lookup_req {
 
 
  struct gfs3_upcall_req {
-        quad_t ia_inode;
+        opaque gfid[16];
 };
 
 

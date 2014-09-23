@@ -550,6 +550,13 @@ glfs_new (const char *volname)
 
 	INIT_LIST_HEAD (&fs->openfds);
 
+        /* Below upcall lists need to be maintained either
+         * for each fs object or else move these intializations
+         * to global place.
+         */
+        INIT_LIST_HEAD (&u_root.upcall_entries);
+	pthread_mutex_init (&u_mutex, NULL);
+
 	return fs;
 }
 

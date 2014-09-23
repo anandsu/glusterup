@@ -30,9 +30,12 @@ void
 glfs_upcall (void *data)
 {
         int ret = -1;
-        quad_t ia_ino;
+        inode_t *inode = NULL;
+        uuid_t gfid;
         gfs3_upcall_req up_req;
         struct iovec *  iov  = NULL;
+        struct glfs_object *object = NULL;
+        upcall_list *u_list = NULL;
 
         gf_log (THIS->name, GF_LOG_WARNING,
                 "Upcall gfapi callback is being called!!!");
@@ -40,7 +43,28 @@ glfs_upcall (void *data)
 
         ret =  xdr_to_generic (*iov, &up_req,
                                 (xdrproc_t)xdr_gfs3_upcall_req);
-        gf_log (THIS->name, GF_LOG_WARNING, "Upcall gfapi Inode = %d, ret = %d", (int)(up_req.ia_inode), ret); 
+        gf_log (THIS->name, GF_LOG_WARNING, "Upcall gfapi gfid = %s, ret = %d", (char *)(up_req.gfid), ret); 
+     
+        memcpy(gfid, (char *)(up_req.gfid), 16); 
+        u_list = GF_CALLOC (1, sizeof(*u_list), glfs_mt_upcall_list_t); 
+        INIT_LIST_HEAD (&u_list->upcall_entries);
+        uuid_copy (u_list->gfid, gfid); 
+
+        pthread_mutex_lock (&u_mutex);
+        list_add_tail (&u_list->upcall_entries, &u_root.upcall_entries);
+        pthread_mutex_unlock (&u_mutex);
+/*        inode = inode_find (subvol->itable, gfid); 
+        object = GF_CALLOC (1, sizeof(struct glfs_object),
+                            glfs_mt_glfs_object_t);
+        if (object == NULL) {
+                errno = ENOMEM;
+                ret = -1;
+                goto out;
+        }
+
+        object->inode = newinode;
+        uuid_copy (object->gfid, gfid); */
+        
 //        gf_log (THIS->name, GF_LOG_WARNING, "Upcall - in glfs_upcall");
         return;
 }
