@@ -42,6 +42,8 @@
 #include <dirent.h>
 #include <sys/statvfs.h>
 
+#include "glusterfs.h"
+
 /* Portability non glibc c++ build systems */
 #ifndef __THROW
 # if defined __cplusplus
@@ -57,6 +59,32 @@ __BEGIN_DECLS
 struct glfs;
 typedef struct glfs glfs_t;
 
+/*
+ * Following are the flag bits to be set for
+ * l_lkflags as part of protocol specific
+ * locking semantics e.g. NFSv4 delegations
+#define GF_PROTO_LOCK_OP_INVALID    0x00000001
+#define GF_PROTO_NFS_SET_DELEG      0x00000002
+#define GF_PROTO_NFS_SET_LOCK       0x00000004
+#define GF_PROTO_NFS_GET_LOCK       0x00000008
+#define GF_PROTO_NFS_UNLOCK         0x00000010
+#define GF_PROTO_NFS_LK_RECLAIM     0x00000012
+ */
+
+struct glock
+{
+  int   lk_cmd;
+  void  *lock_owner;
+  struct flock flock;
+};
+
+struct glfs_lock_args {
+    struct glock *lock;
+    struct glfs_fd *glfd;
+    int reclaim;
+    int lock_type; /* mainly to differentiate nfsv4/4.x delegations */
+    void *reserved;
+};
 
 /*
   SYNOPSIS

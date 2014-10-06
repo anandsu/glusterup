@@ -3277,6 +3277,85 @@ gf_flock_from_flock (struct gf_flock *gf_flock, struct flock *flock)
 	gf_flock->l_pid    = flock->l_pid;
 }
 
+/*
+ * In  : glfs_lockarg
+ * Out : gf_flock
+ */
+static void
+gf_get_syncop_lkinfo (struct glfs_lock_args *glfs_lockarg,
+                      struct gf_flock       *gf_flock)
+{
+    assert (glfs_lockarg);
+    assert (gf_flock);
+    assert (glfs_lockarg->lock);
+
+    gf_flock->l_len     = glfs_lockarg->lock->flock.l_len;
+    gf_flock->l_whence  = glfs_lockarg->lock->flock.l_whence;
+    gf_flock->l_start   = glfs_lockarg->lock->flock.l_start;
+    gf_flock->l_type    = glfs_lockarg->lock->flock.l_type;
+    gf_flock->l_pid     = glfs_lockarg->lock->flock.l_pid;
+
+    //gf_flock->l_owner   = glfs_lockarg->lock->lock_owner;
+    gf_flock->l_lkflags  &= 0x0;
+
+    /* set delegation bit if required */
+    switch (glfs_lockarg->lock_type) {
+        case OPHANDLE_SET_DELEGATION:
+            gf_flock->l_lkflags |= GF_PROTO_NFS_SET_DELEG;
+            break;
+        case OPHANDLE_GET_LOCK:
+            gf_flock->l_lkflags |= GF_PROTO_NFS_GET_LOCK;
+            break;
+        case OPHANDLE_SET_LOCK:
+            gf_flock->l_lkflags |= GF_PROTO_NFS_GET_LOCK;
+            break;
+        default:
+            /* error case, bail? */
+            gf_flock->l_lkflags |= GF_PROTO_LOCK_OP_INVALID;
+            break;
+    }
+
+
+}
+
+int
+glfs_common_lock (struct glfs_lock_args *glfs_lockarg)
+{
+    int             ret         = -1;
+    xlator_t        *subvol     = NULL;
+    struct glfs_fd  *glfd       = NULL;
+    struct gf_flock gf_flock    = {0, };
+    int             cmd         = -1;
+    fd_t            *fd         = NULL;
+
+    assert (glfs_lockarg);
+    glfd = glfs_lockarg->glfd;
+    assert (glfd);
+
+    __glfs_entry_fd (glfd);
+
+	subvol = glfs_active_subvol (glfd->fs);
+	if (!subvol) {
+		ret = -1;
+		errno = EIO;
+		goto out;
+	}
+
+	fd = glfs_resolve_fd (glfd->fs, subvol, glfd);
+	if (!fd) {
+		ret = -1;
+		errno = EBADFD;
+		goto out;
+	}
+
+    cmd = glfs_lockarg->lock->lk_cmd;
+    gf_get_syncop_lkinfo (glfs_lockarg, &gf_flock);
+	ret = syncop_lk (subvol, glfd->fd, cmd, &gf_flock);
+    DECODE_SYNCOP_ERR (ret);
+
+out:
+    return ret;
+}
 
 int
 glfs_posix_lock (struct glfs_fd *glfd, int cmd, struct flock *flock)

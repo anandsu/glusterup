@@ -250,4 +250,10 @@ int glfs_getxattr_process (void *value, size_t size, dict_t *xattr,
 int glfs_get_volume_info (struct glfs *fs);
 
 void glfs_upcall ();
+
+#define OPHANDLE_LK_OP_INVALID  1
+#define OPHANDLE_SET_DELEGATION 2
+#define OPHANDLE_SET_LOCK       4
+#define OPHANDLE_GET_LOCK       8
+
 #endif /* !_GLFS_INTERNAL_H */

@@ -549,6 +549,14 @@ typedef enum {
         GF_EVENT_UPCALL,
 } glusterfs_event_t;
 
+#define GF_PROTO_LOCK_OP_INVALID    0x00000001
+#define GF_PROTO_NFS_SET_DELEG      0x00000002
+#define GF_PROTO_NFS_SET_LOCK       0x00000004
+#define GF_PROTO_NFS_GET_LOCK       0x00000008
+#define GF_PROTO_NFS_UNLOCK         0x00000010
+#define GF_PROTO_NFS_LK_RECLAIM     0x00000012
+
+
 struct gf_flock {
         short        l_type;
         short        l_whence;
@@ -556,6 +564,7 @@ struct gf_flock {
         off_t        l_len;
         pid_t        l_pid;
         gf_lkowner_t l_owner;
+        int          l_lkflags;
 };
 
 #define GF_MUST_CHECK __attribute__((warn_unused_result))
