@@ -18,6 +18,7 @@ struct gf_proto_flock {
 	unsigned int   whence;
 	u_quad_t start;
 	u_quad_t len;
+    int lkflags;
         unsigned int   pid;
         opaque         lk_owner<>;
 } ;
@@ -283,6 +284,7 @@ struct   gfs3_lookup_req {
 	int64_t         fd;
 	unsigned int        cmd;
 	unsigned int        type;
+    int lkflags; /* Special protocol related like NFS RW DELEGATIONS */
 	struct gf_proto_flock flock;
         opaque   xdata<>; /* Extra data */
 }  ;

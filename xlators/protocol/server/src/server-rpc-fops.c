@@ -5869,6 +5869,7 @@ server3_3_lk (rpcsvc_request_t *req)
         gfs3_lk_req          args  = {{0,},};
         int                  ret   = -1;
         int                  op_errno = 0;
+        int                  lkflags = 0;
 
         if (!req)
                 return ret;
@@ -5898,7 +5899,14 @@ server3_3_lk (rpcsvc_request_t *req)
         state->resolve.fd_no = args.fd;
         state->cmd =  args.cmd;
         state->type = args.type;
+        lkflags = args.lkflags;
         memcpy (state->resolve.gfid, args.gfid, 16);
+
+        if (lkflags & GF_PROTO_NFS_SET_DELEG) {
+            gf_log (frame->root->client->bound_xl->name, GF_LOG_ERROR,
+                    "Delegation flag bit is set for lk cmd : %d",
+                    state->cmd);
+        }
 
         switch (state->cmd) {
         case GF_LK_GETLK:

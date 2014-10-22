@@ -3302,7 +3302,11 @@ gf_get_syncop_lkinfo (struct glfs_lock_args *glfs_lockarg,
     switch (glfs_lockarg->lock_type) {
         case OPHANDLE_SET_DELEGATION:
             gf_flock->l_lkflags |= GF_PROTO_NFS_SET_DELEG;
+
+            gf_log (THIS->name, GF_LOG_ERROR, "In gf_get_syncop_lkinfo()............");
+
             break;
+
         case OPHANDLE_GET_LOCK:
             gf_flock->l_lkflags |= GF_PROTO_NFS_GET_LOCK;
             break;
@@ -3327,6 +3331,8 @@ glfs_common_lock (struct glfs_lock_args *glfs_lockarg)
     struct gf_flock gf_flock    = {0, };
     int             cmd         = -1;
     fd_t            *fd         = NULL;
+
+    gf_log (THIS->name, GF_LOG_ERROR, "In glfs_common_lock()........");
 
     assert (glfs_lockarg);
     glfd = glfs_lockarg->glfd;
@@ -3354,6 +3360,7 @@ glfs_common_lock (struct glfs_lock_args *glfs_lockarg)
     DECODE_SYNCOP_ERR (ret);
 
 out:
+    gf_log (THIS->name, GF_LOG_ERROR, "Returning from glfs_common_lock()........");
     return ret;
 }
 
