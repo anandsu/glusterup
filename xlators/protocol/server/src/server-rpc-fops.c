@@ -1417,6 +1417,8 @@ server_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                          uuid_utoa (state->resolve.gfid), strerror (op_errno));
                 goto out;
         }
+                state = CALL_STATE (frame);
+#ifdef DEPRECATED_CODE
 /* list all the client protocol connecting to this process */
 /*pthread_mutex_lock (&conf->mutex);
 {
@@ -1430,8 +1432,8 @@ server_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 }
 pthread_mutex_unlock (&conf->mutex);*/
 //        gf_log (this->name, GF_LOG_INFO, "Upcall server_writev_cbk - gfid = %s", (char *)postbuf->ia_gfid);
-        this->notify (this, GF_EVENT_UPCALL, &postbuf->ia_gfid);
-
+//        this->notify (this, GF_EVENT_UPCALL, &postbuf->ia_gfid);
+#endif
         gf_stat_from_iatt (&rsp.prestat, prebuf);
         gf_stat_from_iatt (&rsp.poststat, postbuf);
 
@@ -1440,6 +1442,12 @@ out:
         rsp.op_errno  = gf_errno_to_error (op_errno);
 
         req = frame->local;
+#ifdef USE_XDATA
+        if (state->xdata) {
+                dict_del (state->xdata, "rpc");
+                dict_del (state->xdata, "trans");
+        }
+#endif
         server_submit_reply (frame, req, &rsp, NULL, 0, NULL,
                              (xdrproc_t)xdr_gfs3_write_rsp);
 
@@ -3740,6 +3748,9 @@ int
 server3_3_writev (rpcsvc_request_t *req)
 {
         server_state_t      *state  = NULL;
+#ifdef USE_XDATA_FOR_UPCALLS
+        server_conf_t       *conf = NULL;
+#endif
         call_frame_t        *frame  = NULL;
         gfs3_write_req       args   = {{0,},};
         ssize_t              len    = 0;
@@ -3808,6 +3819,30 @@ server3_3_writev (rpcsvc_request_t *req)
         dict_dump (state->xdata);
 #endif
 
+#ifdef USE_XDATA_FOR_UPCALLS
+        if (!state->xdata)
+                state->xdata = dict_new ();
+        if (!state->xdata) {
+                ret = -1;
+                goto out;
+        }
+
+        conf = frame->this->private;
+        ret = dict_set_int32 (state->xdata, "rndm", 0);
+        ret = dict_set_static_ptr (state->xdata, "rpc", conf->rpc);
+        if (ret) {
+                gf_log (THIS->name, GF_LOG_ERROR, "Failed to set conf->rpc"
+                        " in request dict");
+                goto out;
+        }
+
+        ret = dict_set_static_ptr (state->xdata, "trans", req->trans);
+        if (ret) {
+                gf_log (THIS->name, GF_LOG_ERROR, "Failed to set req->trans"
+                        " in request dict");
+                goto out;
+        }
+#endif
         ret = 0;
         resolve_and_resume (frame, server_writev_resume);
 out:

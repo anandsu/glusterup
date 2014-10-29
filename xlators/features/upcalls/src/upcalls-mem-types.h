@@ -16,6 +16,7 @@
 enum gf_upcalls_mem_types_ {
 	gf_upcalls_mt_conf_t = gf_common_mt_end + 1,
         gf_upcalls_mt_private_t,
+        gf_upcalls_mt_upcall_entry_t,
         gf_upcalls_mt_end
 };
 #endif

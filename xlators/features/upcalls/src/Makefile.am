@@ -5,11 +5,15 @@ upcalls_la_LDFLAGS = -module -avoid-version
 
 upcalls_la_SOURCES = upcalls.c
 
-upcalls_la_LIBADD = $(top_builddir)/libglusterfs/src/libglusterfs.la
+upcalls_la_LIBADD = $(top_builddir)/libglusterfs/src/libglusterfs.la \
+        $(top_builddir)/rpc/rpc-lib/src/libgfrpc.la \
+        $(top_builddir)/rpc/xdr/src/libgfxdr.la
 
 noinst_HEADERS = upcalls.h
 
-AM_CPPFLAGS = $(GF_CPPFLAGS) -I$(top_srcdir)/libglusterfs/src
+AM_CPPFLAGS = $(GF_CPPFLAGS) -I$(top_srcdir)/libglusterfs/src \
+        -I$(top_srcdir)/rpc/rpc-lib/src \
+        -I$(top_srcdir)/rpc/xdr/src
 
 AM_CFLAGS = -Wall -fno-strict-aliasing $(GF_CFLAGS)
 

@@ -40,6 +40,8 @@ typedef struct _client_t {
         xlator_t    *this;
         int          tbl_index;
         char        *client_uid;
+        void        *trans;
+        void        *rpc;
         struct {
                 int                  flavour;
                 size_t               len;

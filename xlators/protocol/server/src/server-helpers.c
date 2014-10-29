@@ -429,10 +429,12 @@ get_frame_from_request (rpcsvc_request_t *req)
 
         frame->root->unique   = req->xid;
 
-        client = req->trans->xl_private;
         this = req->trans->xl;
         priv = this->private;
         clienttable = this->ctx->clienttable;
+        client = req->trans->xl_private;
+        client->trans = (void *)rpc_transport_ref (req->trans);
+        client->rpc = (void *)priv->rpc;
 
         for (i = 0; i < clienttable->max_clients; i++) {
                 tmp_client = clienttable->cliententries[i].client;

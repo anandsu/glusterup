@@ -1534,7 +1534,7 @@ glfs_h_upcall (struct glfs *fs, void * data)
         uuid_t gfid;
         upcall_list *u_list = NULL;
         xlator_t           *subvol = NULL;
-        inode_t *newinode;
+        inode_t *newinode = NULL;
         int found = 0;
 
         if (!fs) 
@@ -1591,6 +1591,7 @@ glfs_h_upcall (struct glfs *fs, void * data)
 
         return 0;
 out:
+//        gf_log (subvol->name, GF_LOG_WARNING, "in out");
         glfs_subvol_done (fs, subvol);
         return -1;
 }
