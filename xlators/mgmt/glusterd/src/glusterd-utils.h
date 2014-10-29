@@ -222,8 +222,14 @@ glusterd_shd_stop ();
 int32_t
 glusterd_quotad_start ();
 
+/*int32_t
+glusterd_ganesha_start();
+*/
 int32_t
 glusterd_quotad_start_wait ();
+
+int32_t
+glusterd_check_if_ganesha_trans_enabled (glusterd_volinfo_t *volinfo);
 
 int32_t
 glusterd_quotad_stop ();

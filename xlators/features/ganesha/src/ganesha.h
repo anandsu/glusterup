@@ -10,7 +10,7 @@
 
 
 #include "xlator.h"
-
+#include "ganesha-mem-types.h"
 #ifndef MAX_IOVEC
 #define MAX_IOVEC 16
 #endif
@@ -18,3 +18,5 @@
 
 int32_t ganesha_start();
 //int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr);
+//
+

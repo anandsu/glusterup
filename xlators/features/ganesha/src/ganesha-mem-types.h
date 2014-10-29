@@ -7,7 +7,15 @@
    later), or the GNU General Public License, version 2 (GPLv2), in all
    cases as published by the Free Software Foundation.
 */
+#ifndef __GANESHA_MEM_TYPES_H__
+#define __GANESHA_MEM_TYPES_H__
 
 
 #include "mem-types.h"
 
+enum gf_ganesha_mem_types_ {
+     gf_ganesha_mt_priv_t = gf_common_mt_end + 1,
+     gf_ganesha_mt_end
+};
+
+#endif

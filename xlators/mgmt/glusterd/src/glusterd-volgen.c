@@ -2883,9 +2883,13 @@ client_graph_builder (volgen_graph_t *graph, glusterd_volinfo_t *volinfo,
                                " protocol option failed");
         }
 
+
         ret = client_graph_set_perf_options(graph, volinfo, set_dict);
         if (ret)
                 goto out;
+
+
+
 
         if (!volinfo->is_snap_volume && glusterd_is_snapd_enabled (volinfo)) {
                 ret = volgen_graph_build_snapview_client
@@ -2893,18 +2897,7 @@ client_graph_builder (volgen_graph_t *graph, glusterd_volinfo_t *volinfo,
                 if (ret == -1)
                         goto out;
         }
-
-        /* add debug translators depending on the options */
-        ret = check_and_add_debug_xl (graph, set_dict, volname,
-                                      "client");
-        if (ret)
-                return -1;
-
-        ret = -1;
-        xl = volgen_graph_add_as (graph, "debug/io-stats", volname);
-        if (!xl)
-                goto out;
-         ret = dict_get_str_boolean (set_dict, "features.ganesha", 0);
+        ret = dict_get_str_boolean (set_dict, "features.ganesha", 0);
 
         if (ret == -1)
                 goto out;
@@ -2915,6 +2908,21 @@ client_graph_builder (volgen_graph_t *graph, glusterd_volinfo_t *volinfo,
                         ret = -1;
                         goto out;
                 }
+        }
+
+
+
+        /* add debug translators depending on the options */
+        ret = check_and_add_debug_xl (graph, set_dict, volname,
+                                      "client");
+        if (ret)
+                return -1;
+
+
+        ret = -1;
+        xl = volgen_graph_add_as (graph, "debug/io-stats", volname);
+        if (!xl)
+                goto out;
 
 
         ret = volgen_graph_set_options_generic (graph, set_dict, "client",
@@ -2954,7 +2962,7 @@ client_graph_builder (volgen_graph_t *graph, glusterd_volinfo_t *volinfo,
         if (ret)
                 gf_log (this->name, GF_LOG_WARNING, "Failed to change "
                         "log-flush-timeout option");
-        }
+        
 
 
 

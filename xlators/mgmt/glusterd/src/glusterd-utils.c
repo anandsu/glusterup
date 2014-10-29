@@ -6084,7 +6084,9 @@ glusterd_nodesvc_start (char *server, gf_boolean_t wait)
 
         glusterd_get_nodesvc_rundir (server, priv->workdir,
                                      rundir, sizeof (rundir));
+        gf_log("",GF_LOG_INFO,"rundir is %s", rundir);
         ret = mkdir (rundir, 0777);
+        gf_log("",GF_LOG_INFO,"ret value is %d, errno is %d", ret,errno);
 
         if ((ret == -1) && (EEXIST != errno)) {
                 gf_log ("", GF_LOG_ERROR, "Unable to create rundir %s",
@@ -6149,9 +6151,14 @@ glusterd_nodesvc_start (char *server, gf_boolean_t wait)
                                  "--xlator-option",
                                  "*replicate*.entry-self-heal=off", NULL);
         }
+   /*     if (!strcmp (server, "ganesha")) {
+        runner_add_args (&runner, "/usr/local/bin/ganesha.nfsd",
+                         "-L", "/nfs-ganesha-op.log",
+                         "-f","/root/meghana/nfs-ganesha.conf","-N", "NIV_FULL_DEBUG");
+         }
         runner_log (&runner, "", GF_LOG_DEBUG,
                     "Starting the nfs/glustershd services");
-
+*/
         if (!wait) {
                 ret = runner_run_nowait (&runner);
         } else {
@@ -6186,6 +6193,13 @@ glusterd_quotad_start ()
 {
         return glusterd_nodesvc_start ("quotad", _gf_false);
 }
+
+/*int
+glusterd_ganesha_start ()
+{
+        return glusterd_nodesvc_start("ganesha", _gf_false);
+}
+*/
 
 int
 glusterd_quotad_start_wait ()

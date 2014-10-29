@@ -27,9 +27,25 @@
 int32_t
 init (xlator_t *this)
 {
-        int         ret      = -1;
+      int         ret      = -1;
+      /*ganesha_priv_t  *priv= NULL;
+      priv = GF_CALLOC (1, sizeof (*priv),gf_ganesha_mt_priv_t);
+        if (!priv)
+        {
+                ret=-1;
+                gf_log(this->name, GF_LOG_ERROR, "Error priv");
+                goto out;
+        }
+        this->private = priv;
+        ret = 0;
+out:
+        if(ret){
+        GF_FREE(priv)
+}
+}
 
         GF_VALIDATE_OR_GOTO ("ganesha", this, err);
+        */
 
         if (!this->children || this->children->next) {
                 gf_log (this->name, GF_LOG_ERROR,
@@ -43,17 +59,13 @@ init (xlator_t *this)
         }
 
 
-        /* Check if debug mode is turned on */
         if( 1 ) {
                 gf_log (this->name, GF_LOG_DEBUG, "ganesha debug option turned on");
         }
-
-
-
- err:
-
-        return ret;
+err:
+return 0;
 }
+
 
 int ganesha_start()
 {

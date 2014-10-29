@@ -946,6 +946,10 @@ cli_cmd_volume_set_cbk (struct cli_state *state, struct cli_cmd_word *word,
         dict_t                  *options = NULL;
         cli_local_t             *local = NULL;
         char                    *op_errstr = NULL;
+        char                    *key =  NULL;
+        gf_answer_t             answer = GF_ANSWER_NO;
+        char *question = "Enabling nfs-ganesha requires gluster-nfs to be disabled."
+                              "Do you want to continue?";
 
         proc = &cli_rpc_prog->proctable[GLUSTER_CLI_SET_VOLUME];
 
@@ -964,6 +968,18 @@ cli_cmd_volume_set_cbk (struct cli_state *state, struct cli_cmd_word *word,
                 parse_error = 1;
                 goto out;
         }
+
+        key =  (char*) words[3];
+        gf_log("cli",GF_LOG_INFO,"the key is %s",key);
+        if (strcmp("features.ganesha",key) == 0)
+        {
+        answer = cli_cmd_get_confirmation(state, question);
+         if (GF_ANSWER_NO == answer) {
+                ret = -1;
+                goto out;
+        }
+        }
+
 
         CLI_LOCAL_INIT (local, words, frame, options);
 
