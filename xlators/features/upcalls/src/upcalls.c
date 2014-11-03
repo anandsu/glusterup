@@ -94,7 +94,7 @@ get_upcall_entry (uuid_t gfid)
  * RECALL_DELEGATION_IN_PROGRESS, store recall_time so that if that deleg doesnt get
  * cleared, we can check if recall_time is > lease_time or 2*lease_time and make a call
  * to lock xlator to cleanup that lock entry. Mostly this code/logic is already present
- * in ganesha code. Incase if it acnt recall it revokes that delegation after certain time.
+ * in ganesha code. Incase if it cant recall it revokes that delegation after certain time.
  * Cross check that. But even if ganesha handles and libgfapi client dies, we need a way to
  * cleanup these states. Hence store the recall_time. Mostly as like normal locks, lock
  * xlator might be cleaning up these lease locks as well when the client dies. So we may
@@ -152,6 +152,7 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid, void *ex
                 up_client_entry->client_uid = gf_strdup(client->client_uid);
                 up_client_entry->rpc = (rpcsvc_t *)(client->rpc);
                 up_client_entry->trans = (rpc_transport_t *)client->trans; 
+                up_client_entry->timestamp = t;
 
                 /* Have to do it atomically or take lock */
                 list_add_tail (&up_client_entry->client_list, &up_entry->client.client_list);
@@ -238,6 +239,7 @@ upcall_cache_invalidate (call_frame_t *frame, client_t *client, uuid_t gfid, voi
                 up_client_entry->client_uid = gf_strdup(client->client_uid);
                 up_client_entry->rpc = (rpcsvc_t *)(client->rpc);
                 up_client_entry->trans = (rpc_transport_t *)client->trans; 
+                up_client_entry->timestamp = t;
 
                 /* Have to do it atomically or take lock */
                 list_add_tail (&up_client_entry->client_list, &up_entry->client.client_list);
@@ -458,6 +460,8 @@ notify (xlator_t *this, int32_t event, void *data, ...)
                         if (!up_client_entry) {
                                 return -1;
                         }
+                        memcpy(up_req.gfid, notify_event->gfid, 16);
+                        gf_log (this->name, GF_LOG_INFO, "Sending notify to the client- %s, gfid - %s", up_client_entry->client_uid, up_req.gfid);
                         switch (notify_event->event_type) {
                         case CACHE_INVALIDATION:
                                 /* Need to find a way on how to send extra flags;

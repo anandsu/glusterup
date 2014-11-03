@@ -58,7 +58,7 @@ struct _upcall_client_entry_t {
          */
 };
 typedef struct _upcall_client_entry_t upcall_client_entry;
-        
+ 
 struct _upcall_entry_t {
         struct list_head list;
         uuid_t gfid;
