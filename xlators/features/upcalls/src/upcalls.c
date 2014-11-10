@@ -515,6 +515,7 @@ out:
 #endif
 err:
 //        STACK_UNWIND_STRICT (writev, frame, -1, op_errno, NULL, NULL, NULL);
+        frame->local = NULL;
         up_writev_cbk (frame, NULL, frame->this, -1, op_errno, NULL, NULL, NULL);
         return 0;
 }
@@ -618,6 +619,7 @@ up_lk (call_frame_t *frame, xlator_t *this,
 
 err:
 //        STACK_UNWIND (lk, frame, -1, op_errno, NULL, NULL);
+        frame->local = NULL;
         up_lk_cbk (frame, NULL, frame->this, -1, op_errno, NULL, NULL);
         return 0;
 }
