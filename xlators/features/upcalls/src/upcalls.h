@@ -63,6 +63,7 @@ struct _upcall_entry_t {
         struct list_head list;
         uuid_t gfid;
         upcall_client_entry client; /* list of clients */
+        int    deleg_cnt;
 };
 typedef struct _upcall_entry_t upcall_entry;
 
@@ -84,7 +85,12 @@ typedef struct _notify_event_data notify_event_data;
 upcall_entry upcall_entry_list;
 
 upcall_entry * get_upcall_entry (uuid_t gfid);
-int upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid, void *extra);
+upcall_client_entry* get_upcall_client_entry (call_frame_t *frame, uuid_t gfid,
+                                              client_t* client, upcall_entry *up_entry);
+int upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
+                    gf_boolean_t is_write, upcall_entry **up_entry);
+int remove_deleg (call_frame_t *frame, client_t *client, uuid_t gfid);
+int add_deleg (call_frame_t *frame, client_t *client, uuid_t gfid, gf_boolean_t is_write);
 int upcall_cache_invalidate (call_frame_t *frame, client_t *client, uuid_t gfid, void *extra);
 //int add_upcall_entry (upcall_entry * up_entry);
 //int get_client_entry (client_t *client, uuid_t gfid, upcall_client_entry * up_client_entry);

@@ -3311,7 +3311,7 @@ gf_get_syncop_lkinfo (struct glfs_lock_args *glfs_lockarg,
             gf_flock->l_lkflags |= GF_PROTO_NFS_GET_LOCK;
             break;
         case OPHANDLE_SET_LOCK:
-            gf_flock->l_lkflags |= GF_PROTO_NFS_GET_LOCK;
+            gf_flock->l_lkflags |= GF_PROTO_NFS_SET_LOCK;
             break;
         default:
             /* error case, bail? */

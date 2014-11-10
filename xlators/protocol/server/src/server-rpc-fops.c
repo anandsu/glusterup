@@ -5996,6 +5996,22 @@ server3_3_lk (rpcsvc_request_t *req)
                                       args.xdata.xdata_len, ret,
                                       op_errno, out);
 
+        /* Set flag if its Delegations */
+        if (!state->xdata)
+                state->xdata = dict_new ();
+        if (!state->xdata) {
+                ret = -1;
+                goto out;
+        }
+        ret = dict_set_int32 (state->xdata, "set_delegation",
+                             (lkflags & GF_PROTO_NFS_SET_DELEG) ? 1 : 0);
+        if (ret) {
+                gf_log (THIS->name, GF_LOG_ERROR, "Failed to set delegation flag"
+                        "flag  in request dict");
+                goto out;
+        }
+
+
         ret = 0;
         resolve_and_resume (frame, server_lk_resume);
 out:
