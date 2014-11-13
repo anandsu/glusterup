@@ -137,10 +137,18 @@ struct callback_arg
         uint32_t *expire_attr;
 };
 
+enum upcall_event_type_t {
+        CACHE_INVALIDATION,
+        READ_DELEG,
+        READ_WRITE_DELEG
+};
+typedef enum upcall_event_type_t upcall_event_type;
+
 // have to make "fs" specific
 struct _upcall_list {
         struct list_head upcall_entries;
         uuid_t gfid;
+        upcall_event_type event_type;
         //flags
         //deleg_type
 //        struct upcall_list *next;

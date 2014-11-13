@@ -1536,6 +1536,8 @@ glfs_h_upcall (struct glfs *fs, void * data)
         xlator_t           *subvol = NULL;
         inode_t *newinode = NULL;
         int found = 0;
+        int reason = 0; // or INODE_UPDATE ??
+        int flags = 0;
 
         if (!fs) 
                 goto out;
@@ -1574,6 +1576,17 @@ glfs_h_upcall (struct glfs *fs, void * data)
 
                 glhandle->inode = newinode;
                 uuid_copy (glhandle->gfid, gfid);
+
+                switch (u_list->event_type) {
+                case CACHE_INVALIDATION:
+                        reason = INODE_UPDATE;
+                        flags = UP_SIZE; //have to be changed
+                        break;
+                case READ_DELEG:
+                case READ_WRITE_DELEG:
+                        reason = BREAK_DELEGATION;
+                        break;
+                }
                 list_del_init (&u_list->upcall_entries);
                 GF_FREE (u_list);
         }
@@ -1584,8 +1597,8 @@ glfs_h_upcall (struct glfs *fs, void * data)
 //        glhandle = glfs_h_lookupat(cbk->gl_fs, NULL, "/", cbk->buf);
 
         cbk->glhandle = glhandle;
-        *cbk->reason = INODE_UPDATE;
-        *cbk->flags = UP_SIZE;
+        *cbk->reason = reason;
+        *cbk->flags = flags;
 //        cbk->expire_time_attr = time(NULL); 
         glfs_subvol_done (fs, subvol);
 

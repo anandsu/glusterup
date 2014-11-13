@@ -265,6 +265,7 @@ struct   gfs3_lookup_req {
 
  struct gfs3_upcall_req {
         opaque gfid[16];
+        unsigned int   event_type;
 };
 
 

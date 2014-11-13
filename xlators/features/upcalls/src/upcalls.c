@@ -66,6 +66,7 @@ get_upcall_entry (uuid_t gfid)
                         " failed");
                 return NULL;
         }
+        gf_log (THIS->name, GF_LOG_INFO, "In writev_cbk ");
         INIT_LIST_HEAD (&up_entry->list);
         uuid_copy(up_entry->gfid, gfid);
         INIT_LIST_HEAD(&up_entry->client.client_list);
@@ -97,6 +98,7 @@ get_upcall_client_entry (call_frame_t *frame, uuid_t gfid, client_t* client, upc
                                 /* found client entry. Update the timestamp */
                                 up_client_entry->timestamp = time(NULL);
                                 found_client = _gf_true;
+                 gf_log (THIS->name, GF_LOG_INFO, "upcall_entry client found - %s", up_client_entry->client_uid);
                         }
                 }
         }
@@ -178,7 +180,7 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
         upcall_client_entry * up_client_entry = NULL;
         upcall_client_entry * up_client = NULL;
         int found_client = 0;
-        int recall_sent = 0;
+        gf_boolean_t recall_sent = _gf_false;
         notify_event_data n_event_data;
         time_t t = time(NULL);
 
@@ -188,6 +190,7 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
         }
 
         if (!((*up_entry)->deleg_cnt > 0 )) { /* No delegations present */
+                 gf_log (THIS->name, GF_LOG_INFO, "No delegations ");
                 goto out;
         }
 
@@ -215,9 +218,10 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                          */
                           /* send notify */
                         uuid_copy(n_event_data.gfid, gfid);
-                        n_event_data.client_entry = up_client_entry;
-                        n_event_data.event_type =  up_client_entry->deleg;
+                        n_event_data.client_entry = up_client;
+                        n_event_data.event_type =  up_client->deleg;
                         n_event_data.extra = NULL; /* Need to send inode flags */
+                        gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation recall - %s", up_client->client_uid);
                         frame->this->notify (frame->this, GF_EVENT_UPCALL, &n_event_data);
                         recall_sent = _gf_true;
                         if ((*up_entry)->deleg_cnt == 1) { /* No More READ_DELEGATIONS present */
@@ -228,7 +232,7 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
         }
         list_for_each_entry (up_client_entry, &up_client->client_list, client_list) {
                 if (up_client_entry->client_uid) {
-                        if(!strcmp(client->client_uid, up_client_entry->client_uid)) {
+                        if(strcmp(client->client_uid, up_client_entry->client_uid)) {
                                 /* any other client */
                                 if (up_client_entry->deleg & READ_WRITE_DELEGATION){
                                         /* there can only be one READ_WRITE_DELEG */
@@ -241,6 +245,7 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                                         n_event_data.client_entry = up_client_entry;
                                         n_event_data.event_type =  up_client_entry->deleg;
                                         n_event_data.extra = NULL; /* Need to send inode flags */
+                                        gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation recall - %s", up_client_entry->client_uid);
                                         frame->this->notify (frame->this, GF_EVENT_UPCALL, &n_event_data);
                                         recall_sent = _gf_true;
                                         goto out;
@@ -250,6 +255,7 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                                         n_event_data.client_entry = up_client_entry;
                                         n_event_data.event_type =  up_client_entry->deleg;
                                         n_event_data.extra = NULL; /* Need to send inode flags */
+                                        gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation recall - %s", up_client_entry->client_uid);
                                         frame->this->notify (frame->this, GF_EVENT_UPCALL, &n_event_data);
                                         recall_sent = _gf_true;
                                 }
@@ -258,7 +264,7 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
         }
 
 out :
-        return (recall_sent ?  1 :0);
+        return ((recall_sent == _gf_true) ?  1 :0);
 
 err:
         return -1;
@@ -280,6 +286,7 @@ remove_deleg (call_frame_t *frame, client_t *client, uuid_t gfid)
         /* do we need to check if there were delegations?? */
         up_client_entry->deleg = 0;
         up_client_entry->timestamp = time(NULL);
+        gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation removed - %s", client->client_uid);
         return 0;
 }
 
@@ -308,6 +315,7 @@ add_deleg (call_frame_t *frame, client_t *client, uuid_t gfid, gf_boolean_t is_w
         }
 
         up_client_entry->timestamp = time(NULL);
+        gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation added - %s", client->client_uid);
         return 0;
 }
 
@@ -342,7 +350,7 @@ upcall_cache_invalidate (call_frame_t *frame, client_t *client, uuid_t gfid, voi
 
         list_for_each_entry (up_client_entry, &up_client->client_list, client_list) {
                 if (up_client_entry->client_uid) {
-                       if(!strcmp(client->client_uid, up_client_entry->client_uid)) {
+                       if(strcmp(client->client_uid, up_client_entry->client_uid)) {
                                 /* any other client */
                                 /* TODO: check if that client entry is still valid.
                                  * It could have gone down or may be restarted in which case
@@ -357,6 +365,7 @@ upcall_cache_invalidate (call_frame_t *frame, client_t *client, uuid_t gfid, voi
                                         n_event_data.client_entry = up_client_entry;
                                         n_event_data.event_type =  CACHE_INVALIDATION;
                                         n_event_data.extra = extra; /* Need to send inode flags */
+                                        gf_log (THIS->name, GF_LOG_WARNING, "upcall cache invalidation sent - %s", up_client_entry->client_uid);
                                         frame->this->notify (frame->this, GF_EVENT_UPCALL, &n_event_data);
                                  } else {
                                         /* delete this entry ?? */
@@ -412,9 +421,10 @@ up_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 
         client = frame->root->client;
 
-        if (op_ret != 0) {
+        if (op_ret < 0) {
                 goto out;
         }
+        gf_log (this->name, GF_LOG_INFO, "In writev_cbk ");
         upcall_cache_invalidate (frame, client, postbuf->ia_gfid, NULL);
 #ifdef NOT_REQ
         up_entry->rpc = (rpcsvc_t *)(client->rpc);
@@ -488,6 +498,7 @@ up_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
                 goto err;
         }
 #endif
+        gf_log (this->name, GF_LOG_INFO, "In writev ");
         ret = upcall_deleg_check (frame, client, fd->inode->gfid,
                                   _gf_true, &up_entry);
 
@@ -525,11 +536,12 @@ up_lk_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                 int32_t op_ret, int32_t op_errno, struct gf_flock *lock,
                 dict_t *xdata)
 {
-        if (op_ret != 0) {
+        if (op_ret < 0) {
                 goto out;
         }
 
 out:
+        gf_log (this->name, GF_LOG_INFO, "In lk_cbk ");
         frame->local = NULL;
         STACK_UNWIND_STRICT (lk, frame, op_ret, op_errno, lock, xdata);
         return 0;
@@ -549,6 +561,7 @@ up_lk (call_frame_t *frame, xlator_t *this,
         int32_t op_errno = ENOMEM;
         gf_boolean_t is_write_deleg = _gf_false;
 
+        gf_log (this->name, GF_LOG_INFO, "In up_lk ");
         client = frame->root->client;
         frame->local = NULL;
         snprintf (key, sizeof (key), "set_delegation");
@@ -592,6 +605,9 @@ up_lk (call_frame_t *frame, xlator_t *this,
                  * Client must have been created. So frame->root->client
                  * must contain the client entry.
                  */
+                if (!up_entry) {
+                        up_entry = get_upcall_entry (fd->inode->gfid);
+                }
                 switch (flock->l_type) {
                 case GF_LK_F_RDLCK:
                         is_write_deleg = _gf_false;
@@ -717,14 +733,17 @@ notify (xlator_t *this, int32_t event, void *data, ...)
                                 /* Need to find a way on how to send extra flags;
                                  * Maybe add xdata to gfs3_upcall_req
                                  */
+//                                up_req.event_type = 1;
                                 break;
                         case READ_DELEG:
                         case READ_WRITE_DELEG:
+  //                              up_req.event_type = 2;
                                 break;
                         default:
                                 return -1;
                                 // shouldnt be reaching here.
                         }
+                        up_req.event_type = notify_event->event_type;
                         rpcsvc_request_submit(up_client_entry->rpc, up_client_entry->trans,
                                               &upcall_cbk_prog, GF_CBK_UPCALL,
                                               &up_req, this->ctx,
@@ -778,6 +797,7 @@ notify (xlator_t *this, int32_t event, void *data, ...)
 struct xlator_fops fops = {
         .open        = up_open,
         .writev      = up_writev,
+        .lk          = up_lk,
 };
 
 struct xlator_cbks cbks = {

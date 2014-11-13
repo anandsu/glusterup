@@ -48,7 +48,8 @@ glfs_upcall (void *data)
         memcpy(gfid, (char *)(up_req.gfid), 16); 
         u_list = GF_CALLOC (1, sizeof(*u_list), glfs_mt_upcall_list_t); 
         INIT_LIST_HEAD (&u_list->upcall_entries);
-        uuid_copy (u_list->gfid, gfid); 
+        uuid_copy (u_list->gfid, gfid);
+        u_list->event_type = up_req.event_type;
 
         pthread_mutex_lock (&u_mutex);
         list_add_tail (&u_list->upcall_entries, &u_root.upcall_entries);
