@@ -139,8 +139,8 @@ struct callback_arg
 
 enum upcall_event_type_t {
         CACHE_INVALIDATION,
-        READ_DELEG,
-        READ_WRITE_DELEG
+        RECALL_READ_DELEG,
+        RECALL_READ_WRITE_DELEG
 };
 typedef enum upcall_event_type_t upcall_event_type;
 

@@ -1580,11 +1580,13 @@ glfs_h_upcall (struct glfs *fs, void * data)
                 switch (u_list->event_type) {
                 case CACHE_INVALIDATION:
                         reason = INODE_UPDATE;
+                        gf_log (subvol->name, GF_LOG_WARNING, "Reason - CACHE_INVALIDATION");
                         flags = UP_SIZE; //have to be changed
                         break;
-                case READ_DELEG:
-                case READ_WRITE_DELEG:
+                case RECALL_READ_DELEG:
+                case RECALL_READ_WRITE_DELEG:
                         reason = BREAK_DELEGATION;
+                        gf_log (subvol->name, GF_LOG_WARNING, "Reason - BREAK_DELEGATION");
                         break;
                 }
                 list_del_init (&u_list->upcall_entries);

@@ -66,7 +66,7 @@ get_upcall_entry (uuid_t gfid)
                         " failed");
                 return NULL;
         }
-        gf_log (THIS->name, GF_LOG_INFO, "In writev_cbk ");
+        gf_log (THIS->name, GF_LOG_INFO, "In get_upcall_entry ");
         INIT_LIST_HEAD (&up_entry->list);
         uuid_copy(up_entry->gfid, gfid);
         INIT_LIST_HEAD(&up_entry->client.client_list);
@@ -95,10 +95,11 @@ get_upcall_client_entry (call_frame_t *frame, uuid_t gfid, client_t* client, upc
         list_for_each_entry (up_client_entry, &up_client->client_list, client_list) {
                 if (up_client_entry->client_uid) {
                         if(strcmp(client->client_uid, up_client_entry->client_uid) == 0) {
-                                /* found client entry. Update the timestamp */
-                                up_client_entry->timestamp = time(NULL);
+                                /* found client entry. Update the access_time */
+                                up_client_entry->access_time = time(NULL);
                                 found_client = _gf_true;
                  gf_log (THIS->name, GF_LOG_INFO, "upcall_entry client found - %s", up_client_entry->client_uid);
+                                break;
                         }
                 }
         }
@@ -114,7 +115,7 @@ get_upcall_client_entry (call_frame_t *frame, uuid_t gfid, client_t* client, upc
                 up_client_entry->client_uid = gf_strdup(client->client_uid);
                 up_client_entry->rpc = (rpcsvc_t *)(client->rpc);
                 up_client_entry->trans = (rpc_transport_t *)client->trans; 
-                up_client_entry->timestamp = time(NULL);
+                up_client_entry->access_time = time(NULL);
 
                 /* Have to do it atomically or take lock */
                 list_add_tail (&up_client_entry->client_list, &up_entry->client.client_list);
@@ -140,7 +141,7 @@ get_upcall_client_entry (call_frame_t *frame, uuid_t gfid, client_t* client, upc
  * Like in nfs-ganesha code, may be for each upcall entry, store a variable
  * which denotes if/what delegation exists for faster lookup (incase of delegations
  * not present). Also for each upcall/upcall_client entries, change deleg  state to
- * RECALL_DELEGATION_IN_PROGRESS, store recall_time so that if that deleg doesnt get
+ * RECALL_DELEG_IN_PROGRESS, store recall_time so that if that deleg doesnt get
  * cleared, we can check if recall_time is > lease_time or 2*lease_time and make a call
  * to lock xlator to cleanup that lock entry. Mostly this code/logic is already present
  * in ganesha code. Incase if it cant recall it revokes that delegation after certain time.
@@ -206,10 +207,10 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
          * But incase if its write deleg, both read & write access are allowed
          * for this client.
          */
-        if (up_client->deleg & READ_WRITE_DELEG) {
+        if (up_client->deleg == READ_WRITE_DELEG) {
                 GF_ASSERT ((*up_entry)->deleg_cnt == 1);
                 goto out;
-        } else if (up_client->deleg & READ_DELEGATION) {
+        } else if (up_client->deleg == READ_DELEG) {
                 if (is_write) {
                         /* usually same application client will not send for write access when
                          * taken read_delegation. But if its different application client, it should 
@@ -222,19 +223,38 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                         n_event_data.event_type =  up_client->deleg;
                         n_event_data.extra = NULL; /* Need to send inode flags */
                         gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation recall - %s", up_client->client_uid);
+                        up_client->deleg = RECALL_DELEG_IN_PROGRESS;
+                        up_client->recall_time = time(NULL);
                         frame->this->notify (frame->this, GF_EVENT_UPCALL, &n_event_data);
                         recall_sent = _gf_true;
-                        if ((*up_entry)->deleg_cnt == 1) { /* No More READ_DELEGATIONS present */
+                        if ((*up_entry)->deleg_cnt == 1) { /* No More READ_DELEGS present */
                                 recall_sent = _gf_true;
                                 goto out; 
                         }
+                }
+        } else if (up_client->deleg == RECALL_DELEG_IN_PROGRESS) {
+                /* Check if recall_time exceeded lease_time
+                 * XXX: As per rfc, server shoudnt recall
+                 * delegation if CB_PATH_DOWN.
+                 */
+                if (time(NULL) > (up_client->recall_time + LEASE_PERIOD)) {
+                        /* Delete the delegation */
+                        up_client->deleg = 0;
+                        (*up_entry)->deleg_cnt--;
+                        gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation recall time expired, deleting it - %s", up_client->client_uid);
+                        if ((*up_entry)->deleg_cnt == 0) { /* No More READ_DELEGS present */
+                                goto out;
+                        }
+                } else {
+                        recall_sent = _gf_true;
+                        goto out;
                 }
         }
         list_for_each_entry (up_client_entry, &up_client->client_list, client_list) {
                 if (up_client_entry->client_uid) {
                         if(strcmp(client->client_uid, up_client_entry->client_uid)) {
                                 /* any other client */
-                                if (up_client_entry->deleg & READ_WRITE_DELEGATION){
+                                if (up_client_entry->deleg == READ_WRITE_DELEG){
                                         /* there can only be one READ_WRITE_DELEG */
                                         /* If not found_client, continue loop to
                                          * lookup for that entry so that we can store it
@@ -248,8 +268,10 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                                         gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation recall - %s", up_client_entry->client_uid);
                                         frame->this->notify (frame->this, GF_EVENT_UPCALL, &n_event_data);
                                         recall_sent = _gf_true;
+                                        up_client_entry->deleg = RECALL_DELEG_IN_PROGRESS;
+                                        up_client_entry->recall_time = time(NULL);
                                         goto out;
-                                } else if ((up_client_entry->deleg & READ_DELEGATION) && is_write) {
+                                } else if ((up_client_entry->deleg == READ_DELEG) && is_write) {
                                         /* send notify */
                                         uuid_copy(n_event_data.gfid, gfid);
                                         n_event_data.client_entry = up_client_entry;
@@ -258,13 +280,31 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                                         gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation recall - %s", up_client_entry->client_uid);
                                         frame->this->notify (frame->this, GF_EVENT_UPCALL, &n_event_data);
                                         recall_sent = _gf_true;
+                                } else if (up_client_entry->deleg == RECALL_DELEG_IN_PROGRESS) {
+                                        /* Check if recall_time exceeded lease_time
+                                         * XXX: As per rfc, server shoudnt recall
+                                         * delegation if CB_PATH_DOWN.
+                                         */
+                                        if (time(NULL) > (up_client_entry->recall_time + LEASE_PERIOD)) {
+                                                /* Delete the delegation */
+                                                up_client_entry->deleg = 0;
+                                                (*up_entry)->deleg_cnt--;
+                                                gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation recall time expired, deleting it - %s", up_client_entry->client_uid);
+                                                if ((*up_entry)->deleg_cnt == 0) {
+                                                 /* No More READ_DELEGS present */
+                                                        goto out;
+                                                }
+                                        } else {
+                                                recall_sent = _gf_true;
+                                                goto out;
+                                        }
                                 }
                         }
                 }
         }
 
 out :
-        return ((recall_sent == _gf_true) ?  1 :0);
+        return ((recall_sent == _gf_true) ?  1 : 0);
 
 err:
         return -1;
@@ -285,7 +325,7 @@ remove_deleg (call_frame_t *frame, client_t *client, uuid_t gfid)
         }
         /* do we need to check if there were delegations?? */
         up_client_entry->deleg = 0;
-        up_client_entry->timestamp = time(NULL);
+        up_client_entry->access_time = time(NULL);
         gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation removed - %s", client->client_uid);
         return 0;
 }
@@ -305,16 +345,16 @@ add_deleg (call_frame_t *frame, client_t *client, uuid_t gfid, gf_boolean_t is_w
         }
 
         if (is_write) { /* write_delegation */
-                if (up_client_entry->deleg & READ_WRITE_DELEGATION )
+                if (up_client_entry->deleg == READ_WRITE_DELEG)
                         return -1;
-                up_client_entry->deleg = READ_WRITE_DELEGATION;
+                up_client_entry->deleg = READ_WRITE_DELEG;
         } else {
-                if (up_client_entry->deleg & READ_DELEGATION )
+                if (up_client_entry->deleg == READ_DELEG )
                         return -1;
-                up_client_entry->deleg = READ_DELEGATION; 
+                up_client_entry->deleg = READ_DELEG; 
         }
 
-        up_client_entry->timestamp = time(NULL);
+        up_client_entry->access_time = time(NULL);
         gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation added - %s", client->client_uid);
         return 0;
 }
@@ -358,7 +398,7 @@ upcall_cache_invalidate (call_frame_t *frame, client_t *client, uuid_t gfid, voi
                                  * If yes we are good, otherwise need to check if rpc/trans
                                  * objects are still valid
                                  */
-                                if ((t-up_client_entry->timestamp) < 60) { /* Send notify call */
+                                if ((t-up_client_entry->access_time) < LEASE_PERIOD) { /* Send notify call */
                                         /* default cache_invalidation time is 60sec. Need to read that option
                                          * dynamically. */
                                         uuid_copy(n_event_data.gfid, gfid);
@@ -505,9 +545,11 @@ up_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
         if (ret == 1) {
                 /* conflict delegation found and recall has been sent.
                  * Send ERR_DELAY */
+                gf_log (this->name, GF_LOG_INFO, "Delegation conflict.sending EDELAY ");
                 op_errno = EAGAIN; /* ideally should have been EDELAY */
                 goto err;
         } else if (ret == 0) {
+                gf_log (this->name, GF_LOG_INFO, "No Delegation conflict. continuing with fop ");
                 /* No conflict delegation. Go ahead with the fop */
         } else { /* erro */
                 op_errno = EINVAL;
@@ -591,8 +633,10 @@ up_lk (call_frame_t *frame, xlator_t *this,
                         /* conflict delegation found and recall has been sent.
                          * Send ERR_DELAY */
                         op_errno = EAGAIN;
+                        gf_log (this->name, GF_LOG_INFO, "Delegation conflict.sending EDELAY ");
                         goto err;
                 } else if (ret == 0) {
+                        gf_log (this->name, GF_LOG_INFO, "No Delegation conflict. continuing with fop ");
                         /* No conflict delegation. Go ahead with the fop */
                 } else { /* erro */
                         op_errno = EINVAL;

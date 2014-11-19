@@ -24,6 +24,8 @@
 
 #include "lkowner.h"
 
+#define LEASE_PERIOD 60
+
 struct _upcalls_private_t {
 	int client_id;
 };
@@ -31,16 +33,16 @@ typedef struct _upcalls_private_t upcalls_private_t;
 
 enum _deleg_type {
         NONE,
-        READ_DELEGATION,
-        READ_WRITE_DELEGATION,
-        RECALL_DELEGATION
+        READ_DELEG,
+        READ_WRITE_DELEG,
+        RECALL_DELEG_IN_PROGRESS
 };
 typedef enum _deleg_type deleg_type;
 
 enum upcall_event_type_t {
         CACHE_INVALIDATION,
-        READ_DELEG,
-        READ_WRITE_DELEG
+        RECALL_READ_DELEG,
+        RECALL_READ_WRITE_DELEG
 };
 typedef enum upcall_event_type_t upcall_event_type;
 
@@ -50,8 +52,10 @@ struct _upcall_client_entry_t {
         char *client_uid;
         rpc_transport_t *trans;
         rpcsvc_t *rpc;
-        time_t timestamp; /* time last accessed */
+        time_t access_time; /* time last accessed */
         deleg_type deleg;
+        /* maybe club this with access_time */
+        time_t recall_time; /* time recall has been sent */
         /*
          *  Maybe maintain a deleg_list as well for fast traversal or lookup
          *  of deleg states/clients list
