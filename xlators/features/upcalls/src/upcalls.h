@@ -68,8 +68,11 @@ struct _upcall_entry_t {
         uuid_t gfid;
         upcall_client_entry client; /* list of clients */
         int    deleg_cnt;
+        pthread_mutex_t u_client_mutex; /* mutex for clients list of this upcall entry */
 };
 typedef struct _upcall_entry_t upcall_entry;
+
+pthread_mutex_t u_mutex; /* mutex for upcall entries list */
 
 struct _notify_event_data {
         uuid_t gfid;
@@ -90,7 +93,7 @@ upcall_entry upcall_entry_list;
 
 upcall_entry * get_upcall_entry (uuid_t gfid);
 upcall_client_entry* get_upcall_client_entry (call_frame_t *frame, uuid_t gfid,
-                                              client_t* client, upcall_entry *up_entry);
+                                              client_t* client, upcall_entry **up_entry);
 int upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                     gf_boolean_t is_write, upcall_entry **up_entry);
 int remove_deleg (call_frame_t *frame, client_t *client, uuid_t gfid);

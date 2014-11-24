@@ -53,12 +53,18 @@ get_upcall_entry (uuid_t gfid)
         upcall_entry * up_entry = NULL;
 
         /* for now its a linked list. Need to be changed to a better data structure */
+        pthread_mutex_lock (&u_mutex);
         list_for_each_entry (up_entry, &upcall_entry_list.list, list) {
                 if (memcmp(up_entry->gfid, gfid, 16) == 0) {
+                        pthread_mutex_unlock (&u_mutex);
                         /* found entry */
                         return up_entry;
                 }
+                pthread_mutex_unlock (&u_mutex);
+                pthread_mutex_lock (&u_mutex);
         }
+        pthread_mutex_unlock (&u_mutex);
+
         /* entry not found. create one */
         up_entry = GF_CALLOC (1, sizeof(*up_entry), gf_upcalls_mt_upcall_entry_t);
         if (!up_entry) {
@@ -70,28 +76,32 @@ get_upcall_entry (uuid_t gfid)
         INIT_LIST_HEAD (&up_entry->list);
         uuid_copy(up_entry->gfid, gfid);
         INIT_LIST_HEAD(&up_entry->client.client_list);
+        pthread_mutex_init (&up_entry->u_client_mutex, NULL); 
         up_entry->deleg_cnt = 0;
 
         /* Have to do it atomically or take lock */
+        pthread_mutex_lock (&u_mutex);
         list_add_tail (&up_entry->list, &upcall_entry_list.list);
+        pthread_mutex_unlock (&u_mutex);
         return up_entry;
         
 }
 
 upcall_client_entry*
-get_upcall_client_entry (call_frame_t *frame, uuid_t gfid, client_t* client, upcall_entry *up_entry)
+get_upcall_client_entry (call_frame_t *frame, uuid_t gfid, client_t* client, upcall_entry **up_entry)
 {
         upcall_client_entry * up_client_entry = NULL;
         upcall_client_entry * up_client = NULL;
         gf_boolean_t found_client = _gf_false;
 
-        if (!up_entry)
-                up_entry = get_upcall_entry(gfid);
-        if (!up_entry) { /* cannot reach here */
+        if (!*up_entry)
+                *up_entry = get_upcall_entry(gfid);
+        if (!*up_entry) { /* cannot reach here */
                 return NULL;
         }
-        up_client = &up_entry->client;
+        up_client = &(*up_entry)->client;
 
+        pthread_mutex_lock (&(*up_entry)->u_client_mutex);
         list_for_each_entry (up_client_entry, &up_client->client_list, client_list) {
                 if (up_client_entry->client_uid) {
                         if(strcmp(client->client_uid, up_client_entry->client_uid) == 0) {
@@ -102,10 +112,14 @@ get_upcall_client_entry (call_frame_t *frame, uuid_t gfid, client_t* client, upc
                                 break;
                         }
                 }
+                pthread_mutex_unlock (&(*up_entry)->u_client_mutex);
+                pthread_mutex_lock (&(*up_entry)->u_client_mutex);
         }
+        pthread_mutex_unlock (&(*up_entry)->u_client_mutex);
+
         if (!found_client) { /* create one */
                 up_client_entry = NULL;
-                up_client_entry = GF_CALLOC (1, sizeof(*up_entry), gf_upcalls_mt_upcall_entry_t);
+                up_client_entry = GF_CALLOC (1, sizeof(**up_entry), gf_upcalls_mt_upcall_entry_t);
                 if (!up_client_entry) {
                         gf_log (THIS->name, GF_LOG_WARNING, "upcall_entry Memory allocation"
                                 " failed");
@@ -118,7 +132,9 @@ get_upcall_client_entry (call_frame_t *frame, uuid_t gfid, client_t* client, upc
                 up_client_entry->access_time = time(NULL);
 
                 /* Have to do it atomically or take lock */
-                list_add_tail (&up_client_entry->client_list, &up_entry->client.client_list);
+                pthread_mutex_lock (&(*up_entry)->u_client_mutex);
+                list_add_tail (&up_client_entry->client_list, &(*up_entry)->client.client_list);
+                pthread_mutex_unlock (&(*up_entry)->u_client_mutex);
                  gf_log (THIS->name, GF_LOG_INFO, "upcall_entry client added - %s", up_client_entry->client_uid);
                 
         }
@@ -186,7 +202,7 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
         time_t t = time(NULL);
 
         *up_entry = get_upcall_entry(gfid);
-        if (!up_entry) { /* cannot reach here */
+        if (!*up_entry) { /* cannot reach here */
                 return -1;
         }
 
@@ -195,10 +211,11 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                 goto out;
         }
 
-        up_client = get_upcall_client_entry (frame, gfid, client, *up_entry);
+        up_client = get_upcall_client_entry (frame, gfid, client, up_entry);
         if (!up_client) {
                 goto err;
         }
+
 
         /* verify the current client entry delgations list
          * If the current_client has READ_DELEG set and if the request access
@@ -206,6 +223,12 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
          * clients for other read_delegations based on deleg_cnt.
          * But incase if its write deleg, both read & write access are allowed
          * for this client.
+         */
+        /* If there is any request from same client, mostly, its the same application client sending
+         * these fops. For example, when we sent recall_delegation request, it could issuing all the ops
+         * to server WRITE, LOCK / OPEN etc...Not sure if we need to check for only RECALL_DELEG_IN_PROGRESS
+         * state. Also hopefully, other application clients will be rejected by application itself and hence not
+         * expecting those requests.
          */
         if (up_client->deleg == READ_WRITE_DELEG) {
                 GF_ASSERT ((*up_entry)->deleg_cnt == 1);
@@ -237,19 +260,36 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                  * XXX: As per rfc, server shoudnt recall
                  * delegation if CB_PATH_DOWN.
                  */
-                if (time(NULL) > (up_client->recall_time + LEASE_PERIOD)) {
-                        /* Delete the delegation */
-                        up_client->deleg = 0;
-                        (*up_entry)->deleg_cnt--;
-                        gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation recall time expired, deleting it - %s", up_client->client_uid);
-                        if ((*up_entry)->deleg_cnt == 0) { /* No More READ_DELEGS present */
+
+                /* If its from the same client, grant access, mostly these could be 
+                 * fops before returning the delegation. */
+                if ((*up_entry)->deleg_cnt == 1) {
+                        /* grant access */
+                         /* XXX: do we need to check if its read_deleg that was getting recalled
+                        * and the requested access now is write? Assuming those conflicts are
+                         * taken care of by the application. If not we need 2 states - RECALL_READ_DELEG
+                         * and RECALL_WRITE_DELEG */
+                        goto out;
+                } else { /* READ_DELEGs recall in progress, deny write access */
+                        if (!is_write) {
                                 goto out;
                         }
-                } else {
-                        recall_sent = _gf_true;
-                        goto out;
+                        if (time(NULL) > (up_client->recall_time + LEASE_PERIOD)) {
+                                /* Delete the delegation */
+                                up_client->deleg = 0;
+                                (*up_entry)->deleg_cnt--;
+                                gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation recall time expired, deleting it - %s", up_client->client_uid);
+                                if ((*up_entry)->deleg_cnt == 0) { /* No More READ_DELEGS present */
+                                        goto out;
+                                }
+                        } else {
+                                recall_sent = _gf_true;
+                                goto out;
+                        }
                 }
         }
+
+        pthread_mutex_lock (&(*up_entry)->u_client_mutex);
         list_for_each_entry (up_client_entry, &up_client->client_list, client_list) {
                 if (up_client_entry->client_uid) {
                         if(strcmp(client->client_uid, up_client_entry->client_uid)) {
@@ -270,7 +310,7 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                                         recall_sent = _gf_true;
                                         up_client_entry->deleg = RECALL_DELEG_IN_PROGRESS;
                                         up_client_entry->recall_time = time(NULL);
-                                        goto out;
+                                        goto unlock;
                                 } else if ((up_client_entry->deleg == READ_DELEG) && is_write) {
                                         /* send notify */
                                         uuid_copy(n_event_data.gfid, gfid);
@@ -292,16 +332,20 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                                                 gf_log (THIS->name, GF_LOG_WARNING, "upcall Delegation recall time expired, deleting it - %s", up_client_entry->client_uid);
                                                 if ((*up_entry)->deleg_cnt == 0) {
                                                  /* No More READ_DELEGS present */
-                                                        goto out;
+                                                        goto unlock;
                                                 }
                                         } else {
                                                 recall_sent = _gf_true;
-                                                goto out;
+                                                goto unlock;
                                         }
                                 }
                         }
                 }
+                pthread_mutex_unlock (&(*up_entry)->u_client_mutex);
+                pthread_mutex_lock (&(*up_entry)->u_client_mutex);
         }
+unlock:
+        pthread_mutex_unlock (&(*up_entry)->u_client_mutex);
 
 out :
         return ((recall_sent == _gf_true) ?  1 : 0);
@@ -314,11 +358,12 @@ int
 remove_deleg (call_frame_t *frame, client_t *client, uuid_t gfid)
 {
         upcall_client_entry * up_client_entry = NULL;
+        upcall_entry * up_entry = NULL;
 
         if (frame->local) {
                 up_client_entry = (upcall_client_entry *)frame->local;
         } else {
-                up_client_entry = get_upcall_client_entry (frame, gfid, client, NULL);
+                up_client_entry = get_upcall_client_entry (frame, gfid, client, &up_entry);
                 if (!up_client_entry) {
                         return -1;
                 }
@@ -334,11 +379,12 @@ int
 add_deleg (call_frame_t *frame, client_t *client, uuid_t gfid, gf_boolean_t is_write)
 {
         upcall_client_entry * up_client_entry = NULL;
+        upcall_entry * up_entry = NULL;
 
         if (frame->local) {
                 up_client_entry = (upcall_client_entry *)frame->local;
         } else {
-                up_client_entry = get_upcall_client_entry (frame, gfid, client, NULL);
+                up_client_entry = get_upcall_client_entry (frame, gfid, client, &up_entry);
                 if (!up_client_entry) {
                         return -1;
                 }
@@ -381,13 +427,15 @@ upcall_cache_invalidate (call_frame_t *frame, client_t *client, uuid_t gfid, voi
         if (frame->local) {
                 up_client = (upcall_client_entry *)frame->local;
                 frame->local = NULL;
+                up_entry = get_upcall_entry(gfid);
         } else {
-                up_client = get_upcall_client_entry (frame, gfid, client, NULL);
+                up_client = get_upcall_client_entry (frame, gfid, client, &up_entry);
                 if (!up_client) {
                         return -1;
                 }
         }
 
+        pthread_mutex_lock (&up_entry->u_client_mutex);
         list_for_each_entry (up_client_entry, &up_client->client_list, client_list) {
                 if (up_client_entry->client_uid) {
                        if(strcmp(client->client_uid, up_client_entry->client_uid)) {
@@ -417,7 +465,10 @@ upcall_cache_invalidate (call_frame_t *frame, client_t *client, uuid_t gfid, voi
                                  }
                         }
                 }
+                pthread_mutex_unlock (&up_entry->u_client_mutex);
+                pthread_mutex_lock (&up_entry->u_client_mutex);
         }
+        pthread_mutex_unlock (&up_entry->u_client_mutex);
         return 0;
 }
 
@@ -723,6 +774,7 @@ init (xlator_t *this)
 
         INIT_LIST_HEAD (&upcall_entry_list.list);
         INIT_LIST_HEAD (&upcall_entry_list.client.client_list);
+        pthread_mutex_init (&u_mutex, NULL); 
         upcall_entry_list.deleg_cnt = 0;
 out:
 	if (ret) {
