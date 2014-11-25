@@ -506,6 +506,7 @@ up_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 {
         client_t         *client        = NULL;
         upcall_entry     *up_entry = NULL;
+        uint32_t        flags;
         int notify = 0;
         upcall_client_entry * up_client_entry = NULL;
         notify_event_data n_event_data;
@@ -516,7 +517,8 @@ up_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                 goto out;
         }
         gf_log (this->name, GF_LOG_INFO, "In writev_cbk ");
-        upcall_cache_invalidate (frame, client, postbuf->ia_gfid, NULL);
+        flags = (UP_SIZE | UP_TIMES) ;
+        upcall_cache_invalidate (frame, client, postbuf->ia_gfid, &flags);
 #ifdef NOT_REQ
         up_entry->rpc = (rpcsvc_t *)(client->rpc);
         up_entry->trans = (rpc_transport_t *)client->trans; 
@@ -826,14 +828,14 @@ notify (xlator_t *this, int32_t event, void *data, ...)
                         gf_log (this->name, GF_LOG_INFO, "Sending notify to the client- %s, gfid - %s", up_client_entry->client_uid, up_req.gfid);
                         switch (notify_event->event_type) {
                         case CACHE_INVALIDATION:
-                                /* Need to find a way on how to send extra flags;
-                                 * Maybe add xdata to gfs3_upcall_req
-                                 */
 //                                up_req.event_type = 1;
+                                GF_ASSERT (notify_event->extra);
+                                up_req.flags = *(uint32_t *)(notify_event->extra);
                                 break;
                         case READ_DELEG:
                         case READ_WRITE_DELEG:
   //                              up_req.event_type = 2;
+                                up_req.flags = 0;
                                 break;
                         default:
                                 return -1;

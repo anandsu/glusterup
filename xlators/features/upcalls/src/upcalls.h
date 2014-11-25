@@ -26,6 +26,19 @@
 
 #define LEASE_PERIOD 60
 
+/* Defines for the flags in callback_arg, keep up to date with CXIUP_xxx */
+#define UP_NLINK        0x00000001   /* update nlink */
+#define UP_MODE         0x00000002   /* update mode and ctime */
+#define UP_OWN          0x00000004   /* update mode,uid,gid and ctime */
+#define UP_SIZE         0x00000008   /* update fsize */
+#define UP_SIZE_BIG     0x00000010   /* update fsize if bigger */
+#define UP_TIMES        0x00000020   /* update all times */
+#define UP_ATIME        0x00000040   /* update atime only */
+#define UP_PERM         0x00000080   /* update fields needed for permission checking*/
+#define UP_RENAME       0x00000100   /* this is a rename op */
+#define UP_DESTROY_FLAG 0x00000200   /* clear destroyIfDelInode flag */
+#define UP_GANESHA      0x00000400   /* this is a ganesha op */
+
 struct _upcalls_private_t {
 	int client_id;
 };

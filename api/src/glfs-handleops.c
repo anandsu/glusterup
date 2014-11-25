@@ -1537,7 +1537,6 @@ glfs_h_upcall (struct glfs *fs, void * data)
         inode_t *newinode = NULL;
         int found = 0;
         int reason = 0; // or INODE_UPDATE ??
-        int flags = 0;
 
         if (!fs) 
                 goto out;
@@ -1584,9 +1583,14 @@ glfs_h_upcall (struct glfs *fs, void * data)
 
                 switch (u_list->event_type) {
                 case CACHE_INVALIDATION:
-                        reason = INODE_UPDATE;
-                        gf_log (subvol->name, GF_LOG_WARNING, "Reason - CACHE_INVALIDATION");
-                        flags = UP_SIZE; //have to be changed
+                        if (u_list->flags & (~(INODE_UPDATE_FLAGS))) {
+                                /* Invalidate CACHE */
+                                reason = INODE_INVALIDATE;
+                                gf_log (subvol->name, GF_LOG_WARNING, "Reason - INODE_INVALIDATION");
+                        } else {        
+                                reason = INODE_UPDATE;
+                                gf_log (subvol->name, GF_LOG_WARNING, "Reason - INODE_UPDATE");
+                        }
                         break;
                 case RECALL_READ_DELEG:
                 case RECALL_READ_WRITE_DELEG:
@@ -1606,13 +1610,12 @@ glfs_h_upcall (struct glfs *fs, void * data)
         glfs_h_stat (fs, glhandle, cbk->buf);
         cbk->glhandle = glhandle;
         *cbk->reason = reason;
-        *cbk->flags = flags;
+        *cbk->flags = u_list->flags;
 //        cbk->expire_time_attr = time(NULL); 
         glfs_subvol_done (fs, subvol);
 
         return 0;
 out:
-//        gf_log (subvol->name, GF_LOG_WARNING, "in out");
         glfs_subvol_done (fs, subvol);
         return -1;
 }

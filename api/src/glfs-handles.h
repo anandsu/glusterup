@@ -73,6 +73,10 @@
 #define UP_DESTROY_FLAG 0x00000200   /* clear destroyIfDelInode flag */
 #define UP_GANESHA      0x00000400   /* this is a ganesha op */
 
+#define INODE_UPDATE_FLAGS (UP_NLINK | UP_MODE | \
+                            UP_OWN | UP_SIZE | \
+                            UP_SIZE_BIG | UP_TIMES | \
+                            UP_ATIME)
 
 /* reason list for reason in callback_arg */
 #define INODE_INVALIDATE        1

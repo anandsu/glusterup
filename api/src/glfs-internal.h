@@ -149,9 +149,8 @@ struct _upcall_list {
         struct list_head upcall_entries;
         uuid_t gfid;
         upcall_event_type event_type;
-        //flags
+        uint32_t flags;
         //deleg_type
-//        struct upcall_list *next;
 };
 typedef struct _upcall_list upcall_list;
 

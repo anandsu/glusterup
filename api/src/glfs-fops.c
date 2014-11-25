@@ -50,6 +50,7 @@ glfs_upcall (void *data)
         INIT_LIST_HEAD (&u_list->upcall_entries);
         uuid_copy (u_list->gfid, gfid);
         u_list->event_type = up_req.event_type;
+        u_list->flags = (uint32_t)(up_req.flags);
 
         pthread_mutex_lock (&u_mutex);
         list_add_tail (&u_list->upcall_entries, &u_root.upcall_entries);
