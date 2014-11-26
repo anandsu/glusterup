@@ -40,18 +40,25 @@ int stop_ganesha()
 return 1;
 }
 
-int ganesha_add_export()
+int ganesha_add_export(dict_t *dict, glusterd_volinfo_t *volinfo)
 {
 
 runner_t                runner                     = {0,};
 int ret = -1;
+dict_t *vol_opts =  NULL;
+vol_opts = volinfo->dict;
 
+ret = dict_set_str(vol_opts, "nfs.disable","on");
 runinit (&runner);
+glusterd_nfs_server_stop();
 
-runner_add_args (&runner, "/usr/local/bin/ganesha.nfsd",
+runner_add_args (&runner, "/usr/bin/ganesha.nfsd",
                          "-L", "/nfs-ganesha-op.log",
                          "-f","/root/nfs-ganesha.conf","-N", "NIV_FULL_DEBUG",NULL);
 ret = runner_run_nowait(&runner);
+gf_log ( "" ,GF_LOG_INFO,"just before origin");
+if (is_origin_glusterd(dict))
+        gf_log ("",GF_LOG_INFO, "I am originator glusterd");
 
 return ret;
 }
@@ -70,13 +77,13 @@ int ganesha_remove_export()
 return 1;
 }
 
-int ganesha_export_entry( char *volname, char **op_errstr)
+int ganesha_export_entry( char *volname, char **op_errstr,dict_t *dict, glusterd_volinfo_t *volinfo)
 {
         int ret = -1;
 
         ret = create_export_config(volname);
         ret =  start_ganesha();
-        ret =  ganesha_add_export();
+        ret =  ganesha_add_export(dict,volinfo);
         return ret;
 }
 
@@ -107,10 +114,9 @@ out:
 
 
 
-int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr,char *key)
+int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr,char *key, glusterd_volinfo_t *volinfo)
 {
 
-        glusterd_volinfo_t     *volinfo      = NULL;
         int32_t                 ret          = -1;
         char                   *volname      = NULL;
         int                     type         = -1;
@@ -132,7 +138,7 @@ int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr,char *key)
         switch (1)
         {
                 case 1 :
-                        ret =  ganesha_export_entry(volname,op_errstr);
+                        ret =  ganesha_export_entry(volname,op_errstr,dict,volinfo);
 
                         if ( ret < 0 )
                                 goto out;

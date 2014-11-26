@@ -971,7 +971,7 @@ cli_cmd_volume_set_cbk (struct cli_state *state, struct cli_cmd_word *word,
 
         key =  (char*) words[3];
         gf_log("cli",GF_LOG_INFO,"the key is %s",key);
-        if (strcmp("features.ganesha",key) == 0)
+        if (strcmp("ganesha.enable",key) == 0)
         {
         answer = cli_cmd_get_confirmation(state, question);
          if (GF_ANSWER_NO == answer) {

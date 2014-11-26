@@ -932,7 +932,7 @@ int glusterd_op_create_volume (dict_t *dict, char **op_errstr);
 int glusterd_op_start_volume (dict_t *dict, char **op_errstr);
 int glusterd_op_stop_volume (dict_t *dict);
 int glusterd_op_delete_volume (dict_t *dict);
-int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr, char *key);
+int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr, char *key,glusterd_volinfo_t *volinfo);
 int glusterd_op_add_brick (dict_t *dict, char **op_errstr);
 int glusterd_op_remove_brick (dict_t *dict, char **op_errstr);
 int glusterd_op_stage_add_brick (dict_t *dict, char **op_errstr,

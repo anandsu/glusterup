@@ -451,7 +451,8 @@ out:
 
 
 static int
-glusterd_check_ganesha_cmd (char *key, char *value, char **errstr, dict_t *dict)
+glusterd_check_ganesha_cmd (char *key, char *value, char **errstr, dict_t *dict,
+                            glusterd_volinfo_t *volinfo)
 {
         int                ret = -1;
         gf_boolean_t       b   = _gf_false;
@@ -461,7 +462,7 @@ glusterd_check_ganesha_cmd (char *key, char *value, char **errstr, dict_t *dict)
            (strcmp (key, "features.ganesha") == 0)) {
                 gf_log ("", GF_LOG_INFO,"ganesha command found");
                 ret = gf_string2boolean (value, &b);
-                ret = glusterd_handle_ganesha_op(dict,errstr,key);
+                ret = glusterd_handle_ganesha_op(dict,errstr,key,volinfo);
 
 
         }
@@ -2051,7 +2052,7 @@ glusterd_op_set_volume (dict_t *dict, char **errstr)
                 }
                  if ((strncmp (key, "ganesha",7) == 0) ||
                 (strcmp (key, "features.ganesha") == 0)) {
-                ret =  glusterd_check_ganesha_cmd(key,value,errstr,dict);
+                ret =  glusterd_check_ganesha_cmd(key,value,errstr,dict,volinfo);
                 if ( ret == -1)
                         {
                                 ret = -1;
