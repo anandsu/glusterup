@@ -462,7 +462,7 @@ glusterd_check_ganesha_cmd (char *key, char *value, char **errstr, dict_t *dict,
            (strcmp (key, "features.ganesha") == 0)) {
                 gf_log ("", GF_LOG_INFO,"ganesha command found");
                 ret = gf_string2boolean (value, &b);
-                ret = glusterd_handle_ganesha_op(dict,errstr,key,volinfo);
+                ret = glusterd_handle_ganesha_op(dict,errstr,key,value,volinfo);
 
 
         }

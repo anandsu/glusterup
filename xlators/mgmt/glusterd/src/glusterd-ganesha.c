@@ -25,22 +25,49 @@ return 1;
 }
 
 
-int create_export_config()
+int create_export_config(char *volname)
 {
+runner_t                runner                     = {0,};
+int ret = -1;
+runinit (&runner);
+runner_add_args (&runner, "sh ", "/etc/ganesha/create_export.sh",volname,NULL);
+ret = runner_run_nowait(&runner);
 return 1;
 }
 
-int  start_ganesha()
+int  ganesha_add_export(char *volname)
 {
-return 1;
+runner_t runner = {0,1};
+int ret = -1;
+runinit (&runner);
+create_export_config(volname);
+runner_add_args (&runner, "sh", "/etc/ganesha/dbus-send.sh", "add", volname ,NULL);
+ret = runner_run_nowait(&runner);
+return ret;
 }
 
-int stop_ganesha()
+
+
+int stop_ganesha(dict_t *dict,char **op_errstr)
 {
-return 1;
+runner_t                runner                     = {0,};
+int ret = -1;
+
+runinit (&runner);
+runner_add_args (&runner, "pkill", "ganesha.nfsd",NULL);
+ret = runner_run_reuse (&runner);
+if (is_origin_glusterd(dict))
+{
+gf_log ( "",GF_LOG_INFO,"before teardown");
+runinit (&runner);
+runner_add_args (&runner, "sh","/etc/ganesha/ganesha.sh","teardown",NULL);
 }
 
-int ganesha_add_export(dict_t *dict, glusterd_volinfo_t *volinfo)
+ret = runner_run_nowait(&runner);
+return ret;
+}
+
+int start_ganesha(dict_t *dict, glusterd_volinfo_t *volinfo)
 {
 
 runner_t                runner                     = {0,};
@@ -54,9 +81,8 @@ glusterd_nfs_server_stop();
 
 runner_add_args (&runner, "/usr/bin/ganesha.nfsd",
                          "-L", "/nfs-ganesha-op.log",
-                         "-f","/root/nfs-ganesha.conf","-N", "NIV_FULL_DEBUG",NULL);
+                         "-f","/etc/ganesha/nfs-ganesha.conf","-N", "NIV_FULL_DEBUG",NULL);
 ret = runner_run_nowait(&runner);
-gf_log ( "" ,GF_LOG_INFO,"just before origin");
 if (is_origin_glusterd(dict))
         gf_log ("",GF_LOG_INFO, "I am originator glusterd");
 
@@ -81,10 +107,10 @@ int ganesha_export_entry( char *volname, char **op_errstr,dict_t *dict, glusterd
 {
         int ret = -1;
 
-        ret = create_export_config(volname);
-        ret =  start_ganesha();
-        ret =  ganesha_add_export(dict,volinfo);
-        return ret;
+     //   ret = create_export_config(volname);
+      //  ret =  start_ganesha(volname);
+       // ret =  ganesha_add_export(dict,volinfo);
+        return 1;
 }
 
 
@@ -114,7 +140,7 @@ out:
 
 
 
-int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr,char *key, glusterd_volinfo_t *volinfo)
+int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr,char *key,char *value, glusterd_volinfo_t *volinfo)
 {
 
         int32_t                 ret          = -1;
@@ -135,7 +161,7 @@ int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr,char *key, gluster
         }
 
 
-        switch (1)
+  /*      switch (1)
         {
                 case 1 :
                         ret =  ganesha_export_entry(volname,op_errstr,dict,volinfo);
@@ -149,6 +175,33 @@ int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr,char *key, gluster
                         break;
 
 
+        }
+*/
+        gf_log ( "",GF_LOG_INFO,"the value is %s ",value);
+        if (strcmp (key, "ganesha.enable") == 0)
+        {
+        if (strcmp (value,"on") == 0)
+        {
+                ret =  ganesha_add_export(volname);
+
+                        if ( ret < 0 )
+                                goto out;
+        }
+
+        else
+        {
+                ret = stop_ganesha (dict,op_errstr);
+                        if ( ret < 0)
+                                goto out;
+        }
+        }
+        if ( strcmp (key, "features.ganesha") == 0)
+        {
+               ret =  start_ganesha(dict,volinfo);
+
+                        if ( ret < 0 )
+                                goto out;
+ 
         }
 
 out :

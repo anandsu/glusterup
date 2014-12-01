@@ -95,6 +95,13 @@ struct xlator_cbks cbks = {
 };
 
 struct volume_options options[] = {
+        {
+         .key = {"features.ganesha"},
+         .default_value = "off",
+         .type = GF_OPTION_TYPE_ANY,
+         .description= "enable translator"
+
+        },
         { .key  = {"ganesha.enable"},
           .default_value = "off",
           .type = GF_OPTION_TYPE_ANY,
