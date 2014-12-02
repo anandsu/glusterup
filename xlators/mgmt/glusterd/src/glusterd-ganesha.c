@@ -30,6 +30,7 @@ int create_export_config(char *volname)
 runner_t                runner                     = {0,};
 int ret = -1;
 runinit (&runner);
+gf_log("",GF_LOG_INFO,"running create_EXPORT");
 runner_add_args (&runner, "sh ", "/etc/ganesha/create_export.sh",volname,NULL);
 ret = runner_run_nowait(&runner);
 return 1;
@@ -41,6 +42,7 @@ runner_t runner = {0,1};
 int ret = -1;
 runinit (&runner);
 create_export_config(volname);
+gf_log("",GF_LOG_INFO,"runing dbus send");
 runner_add_args (&runner, "sh", "/etc/ganesha/dbus-send.sh", "add", volname ,NULL);
 ret = runner_run_nowait(&runner);
 return ret;
@@ -60,7 +62,7 @@ if (is_origin_glusterd(dict))
 {
 gf_log ( "",GF_LOG_INFO,"before teardown");
 runinit (&runner);
-runner_add_args (&runner, "sh","/etc/ganesha/ganesha.sh","teardown",NULL);
+runner_add_args (&runner, "sh","/etc/ganesha/ganesha-ha.sh","teardown",NULL);
 }
 
 ret = runner_run_nowait(&runner);
