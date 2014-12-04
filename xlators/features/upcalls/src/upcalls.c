@@ -626,6 +626,84 @@ err:
         return 0;
 }
 
+
+int
+up_readv_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
+               int op_ret, int op_errno,
+               struct iovec *vector, int count, struct iatt *stbuf,
+               struct iobref *iobref, dict_t *xdata)
+{
+        client_t         *client        = NULL;
+        upcall_entry     *up_entry = NULL;
+        uint32_t        flags;
+        int notify = 0;
+        upcall_client_entry * up_client_entry = NULL;
+        notify_event_data n_event_data;
+
+        client = frame->root->client;
+
+        if (op_ret < 0) {
+                goto out;
+        }
+        gf_log (this->name, GF_LOG_INFO, "In readv_cbk ");
+        flags = (UP_ATIME) ;
+        upcall_cache_invalidate (frame, client, stbuf->ia_gfid, &flags);
+
+out:
+        frame->local = NULL;
+        STACK_UNWIND_STRICT (readv, frame, op_ret, op_errno, vector, count, stbuf,
+                          iobref, xdata);
+
+        return 0;
+}
+
+int
+up_readv (call_frame_t *frame, xlator_t *this,
+             fd_t *fd, size_t size, off_t offset, uint32_t flags, dict_t *xdata)
+{
+        int ret = -1;
+        client_t            *client        = NULL;
+        dict_t              *dict                = NULL;
+        char                 key[1024]            = {0};
+        upcall_client_entry *up_client_entry = NULL;
+        upcall_entry *up_entry = NULL;
+        int32_t         op_errno = ENOMEM;
+
+        client = frame->root->client;
+        frame->local = NULL;
+
+        gf_log (this->name, GF_LOG_INFO, "In readv ");
+        ret = upcall_deleg_check (frame, client, fd->inode->gfid,
+                                  _gf_false, &up_entry);
+
+        if (ret == 1) {
+                /* conflict delegation found and recall has been sent.
+ *                  * Send ERR_DELAY */
+                gf_log (this->name, GF_LOG_INFO, "Delegation conflict.sending EDELAY ");
+                op_errno = EAGAIN; /* ideally should have been EDELAY */
+                goto err;
+        } else if (ret == 0) {
+                gf_log (this->name, GF_LOG_INFO, "No Delegation conflict. continuing with fop ");
+                /* No conflict delegation. Go ahead with the fop */
+        } else { /* erro */
+                op_errno = EINVAL;
+                goto err;
+        }
+
+        STACK_WIND (frame, up_readv_cbk,
+                    FIRST_CHILD(this), FIRST_CHILD(this)->fops->readv,
+                    fd, size, offset, flags, xdata);
+
+        return 0;
+
+err:
+        frame->local = NULL;
+        op_errno = (op_errno == -1) ? errno : op_errno;
+        STACK_UNWIND_STRICT (readv, frame, -1, op_errno, NULL, 0, NULL, NULL, NULL);
+
+        return 0;
+}
+
 int32_t
 up_lk_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                 int32_t op_ret, int32_t op_errno, struct gf_flock *lock,
@@ -894,6 +972,7 @@ notify (xlator_t *this, int32_t event, void *data, ...)
 
 struct xlator_fops fops = {
         .open        = up_open,
+        .readv       = up_readv,
         .writev      = up_writev,
         .lk          = up_lk,
 };
