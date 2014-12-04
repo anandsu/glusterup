@@ -31,7 +31,7 @@ runner_t                runner                     = {0,};
 int ret = -1;
 runinit (&runner);
 gf_log("",GF_LOG_INFO,"running create_EXPORT");
-runner_add_args (&runner, "sh ", "/etc/ganesha/create_export.sh",volname,NULL);
+runner_add_args (&runner, "sh", "/etc/ganesha/create_export.sh",volname,NULL);
 ret = runner_run_nowait(&runner);
 return 1;
 }
@@ -57,9 +57,10 @@ if (is_origin_glusterd(dict))
 gf_log ( "",GF_LOG_INFO,"before teardown");
 runinit (&runner);
 runner_add_args (&runner, "sh","/etc/ganesha/ganesha-ha.sh","teardown",NULL);
-}
 ret = runner_run_nowait(&runner);
 return ret;
+}
+return 1;
 }
 
 int setup_cluster(dict_t *dict)
@@ -72,11 +73,13 @@ if (is_origin_glusterd(dict))
        runinit (&runner);
        runner_add_args (&runner, "sh","/etc/ganesha/ganesha-ha.sh","setup",NULL);
 
-}
 ret =  runner_run_nowait(&runner);
 return ret;
-
 }
+return 1;
+}
+
+
 int stop_ganesha(dict_t *dict,char **op_errstr)
 {
 runner_t                runner                     = {0,};
