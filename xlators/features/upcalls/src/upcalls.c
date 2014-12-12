@@ -476,11 +476,25 @@ int
 up_open_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
              int32_t op_ret, int32_t op_errno, fd_t *fd, dict_t *xdata)
 {
+        client_t         *client        = NULL;
+        upcall_entry     *up_entry = NULL;
+        uint32_t        flags;
+        int notify = 0;
+        upcall_client_entry * up_client_entry = NULL;
+        notify_event_data n_event_data;
 
-        if (op_ret < 0)
+        client = frame->root->client;
+
+        if (op_ret < 0) {
                 goto unwind;
+        }
+        gf_log (this->name, GF_LOG_INFO, "In open_cbk ");
+        flags = (UP_ATIME) ;
+        upcall_cache_invalidate (frame, client, fd->inode->gfid, &flags);
+
 
 unwind:
+        frame->local = NULL;
         STACK_UNWIND_STRICT (open, frame, op_ret, op_errno, fd, xdata);
 
         return 0;
@@ -491,9 +505,51 @@ int
 up_open (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
          fd_t *fd, dict_t *xdata)
 {
+        int ret = -1;
+        client_t            *client        = NULL;
+        dict_t              *dict                = NULL;
+        char                 key[1024]            = {0};
+        upcall_client_entry *up_client_entry = NULL;
+        upcall_entry *up_entry = NULL;
+        int32_t         op_errno = ENOMEM;
+        gf_boolean_t   is_write = _gf_false;
+
+        client = frame->root->client;
+        frame->local = NULL;
+
+        gf_log (this->name, GF_LOG_INFO, "In open ");
+
+        if (flags & (O_WRONLY | O_RDWR)) {
+                is_write = _gf_true;
+        }
+        ret = upcall_deleg_check (frame, client, fd->inode->gfid,
+                                  is_write, &up_entry);
+
+        if (ret == 1) {
+                /* conflict delegation found and recall has been sent.
+ *                  * Send ERR_DELAY */
+                gf_log (this->name, GF_LOG_INFO, "Delegation conflict.sending EDELAY ");
+                op_errno = EAGAIN; /* ideally should have been EDELAY */
+                goto err;
+        } else if (ret == 0) {
+                gf_log (this->name, GF_LOG_INFO, "No Delegation conflict. continuing with fop ");
+                /* No conflict delegation. Go ahead with the fop */
+        } else { /* erro */
+                op_errno = EINVAL;
+                goto err;
+        }
+
         STACK_WIND (frame, up_open_cbk,
                     FIRST_CHILD(this), FIRST_CHILD(this)->fops->open,
                     loc, flags, fd, xdata);
+
+        return 0;
+
+err:
+        frame->local = NULL;
+        op_errno = (op_errno == -1) ? errno : op_errno;
+        STACK_UNWIND_STRICT (open, frame, -1, op_errno, NULL, NULL);
+        STACK_UNWIND_STRICT (readv, frame, -1, op_errno, NULL, 0, NULL, NULL, NULL);
 
         return 0;
 }
