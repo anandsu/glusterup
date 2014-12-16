@@ -43,6 +43,23 @@ rpcsvc_cbk_program_t upcall_cbk_prog = {
         .progver   = GLUSTER_CBK_VERSION,
 };
 
+#define PROCESS_DELEG(frame, client, gfid, is_write, up_entry) do {\
+        ret = upcall_deleg_check (frame, client, gfid, is_write, up_entry); \
+        if (ret == 1) {                 \
+                /* conflict delegation found and recall has been sent. \
+ *                  * Send ERR_DELAY */ \
+                gf_log (this->name, GF_LOG_INFO, "Delegation conflict.sending EDELAY ");                               \
+                op_errno = EAGAIN; /* ideally should have been EDELAY */ \
+                goto err;               \
+        } else if (ret == 0) {          \
+                gf_log (this->name, GF_LOG_INFO, "No Delegation conflict. continuing with fop ");                       \
+                /* No conflict delegation. Go ahead with the fop */ \
+        } else { /* erro */             \
+                op_errno = EINVAL;      \
+                goto err;               \
+        }                               \
+        } while (0)
+
 /* For now upcall entries are maintained in a linked list.
  * Given a gfid, traverse through that list and lookup for an entry
  * with that gfid. If none found, create an entry with the gfid given.
@@ -522,22 +539,8 @@ up_open (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
         if (flags & (O_WRONLY | O_RDWR)) {
                 is_write = _gf_true;
         }
-        ret = upcall_deleg_check (frame, client, fd->inode->gfid,
-                                  is_write, &up_entry);
-
-        if (ret == 1) {
-                /* conflict delegation found and recall has been sent.
- *                  * Send ERR_DELAY */
-                gf_log (this->name, GF_LOG_INFO, "Delegation conflict.sending EDELAY ");
-                op_errno = EAGAIN; /* ideally should have been EDELAY */
-                goto err;
-        } else if (ret == 0) {
-                gf_log (this->name, GF_LOG_INFO, "No Delegation conflict. continuing with fop ");
-                /* No conflict delegation. Go ahead with the fop */
-        } else { /* erro */
-                op_errno = EINVAL;
-                goto err;
-        }
+        PROCESS_DELEG (frame, client, fd->inode->gfid,
+                       is_write, &up_entry);
 
         STACK_WIND (frame, up_open_cbk,
                     FIRST_CHILD(this), FIRST_CHILD(this)->fops->open,
@@ -648,22 +651,8 @@ up_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
         }
 #endif
         gf_log (this->name, GF_LOG_INFO, "In writev ");
-        ret = upcall_deleg_check (frame, client, fd->inode->gfid,
-                                  _gf_true, &up_entry);
-
-        if (ret == 1) {
-                /* conflict delegation found and recall has been sent.
-                 * Send ERR_DELAY */
-                gf_log (this->name, GF_LOG_INFO, "Delegation conflict.sending EDELAY ");
-                op_errno = EAGAIN; /* ideally should have been EDELAY */
-                goto err;
-        } else if (ret == 0) {
-                gf_log (this->name, GF_LOG_INFO, "No Delegation conflict. continuing with fop ");
-                /* No conflict delegation. Go ahead with the fop */
-        } else { /* erro */
-                op_errno = EINVAL;
-                goto err;
-        }
+        PROCESS_DELEG (frame, client, fd->inode->gfid,
+                       _gf_true, &up_entry);
 
         STACK_WIND (frame, up_writev_cbk,
                     FIRST_CHILD(this), FIRST_CHILD(this)->fops->writev,
@@ -729,22 +718,8 @@ up_readv (call_frame_t *frame, xlator_t *this,
         frame->local = NULL;
 
         gf_log (this->name, GF_LOG_INFO, "In readv ");
-        ret = upcall_deleg_check (frame, client, fd->inode->gfid,
-                                  _gf_false, &up_entry);
-
-        if (ret == 1) {
-                /* conflict delegation found and recall has been sent.
- *                  * Send ERR_DELAY */
-                gf_log (this->name, GF_LOG_INFO, "Delegation conflict.sending EDELAY ");
-                op_errno = EAGAIN; /* ideally should have been EDELAY */
-                goto err;
-        } else if (ret == 0) {
-                gf_log (this->name, GF_LOG_INFO, "No Delegation conflict. continuing with fop ");
-                /* No conflict delegation. Go ahead with the fop */
-        } else { /* erro */
-                op_errno = EINVAL;
-                goto err;
-        }
+        PROCESS_DELEG (frame, client, fd->inode->gfid,
+                       _gf_false, &up_entry);
 
         STACK_WIND (frame, up_readv_cbk,
                     FIRST_CHILD(this), FIRST_CHILD(this)->fops->readv,
@@ -768,6 +743,10 @@ up_lk_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         if (op_ret < 0) {
                 goto out;
         }
+        gf_log (this->name, GF_LOG_INFO, "In lk_cbk ");
+        /* How do we get gfid??
+        flags = (UP_ATIME) ;
+        upcall_cache_invalidate (frame, client, stbuf->ia_gfid, &flags); */
 
 out:
         gf_log (this->name, GF_LOG_INFO, "In lk_cbk ");
@@ -814,21 +793,8 @@ up_lk (call_frame_t *frame, xlator_t *this,
          * XXX: Check if all this delegation conflict resolution is correct as per RFC
          */
         if (flock->l_type != GF_LK_F_UNLCK) {
-                ret = upcall_deleg_check (frame, client, fd->inode->gfid, _gf_true, &up_entry);
-
-                if (ret == 1) {
-                        /* conflict delegation found and recall has been sent.
-                         * Send ERR_DELAY */
-                        op_errno = EAGAIN;
-                        gf_log (this->name, GF_LOG_INFO, "Delegation conflict.sending EDELAY ");
-                        goto err;
-                } else if (ret == 0) {
-                        gf_log (this->name, GF_LOG_INFO, "No Delegation conflict. continuing with fop ");
-                        /* No conflict delegation. Go ahead with the fop */
-                } else { /* erro */
-                        op_errno = EINVAL;
-                        goto err;
-                }
+                PROCESS_DELEG (frame, client, fd->inode->gfid,
+                               _gf_true, &up_entry);
         }
 
         if (delegations_enabled) {
@@ -868,6 +834,132 @@ err:
 //        STACK_UNWIND (lk, frame, -1, op_errno, NULL, NULL);
         frame->local = NULL;
         up_lk_cbk (frame, NULL, frame->this, -1, op_errno, NULL, NULL);
+        return 0;
+}
+
+int
+up_truncate_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
+                  int op_ret, int op_errno, struct iatt *prebuf,
+                  struct iatt *postbuf, dict_t *xdata)
+{
+        client_t         *client        = NULL;
+        upcall_entry     *up_entry = NULL;
+        uint32_t        flags;
+        int notify = 0;
+        upcall_client_entry * up_client_entry = NULL;
+        notify_event_data n_event_data;
+
+        client = frame->root->client;
+
+        if (op_ret < 0) {
+                goto out;
+        }
+        gf_log (this->name, GF_LOG_INFO, "In truncate_cbk ");
+        flags = (UP_SIZE | UP_TIMES) ;
+        upcall_cache_invalidate (frame, client, postbuf->ia_gfid, &flags);
+
+out:
+        frame->local = NULL;
+        STACK_UNWIND_STRICT (truncate, frame, op_ret, op_errno,
+                             prebuf, postbuf, xdata);
+        return 0;
+}
+
+int
+up_truncate (call_frame_t *frame, xlator_t *this, loc_t *loc, off_t offset,
+              dict_t *xdata)
+{
+        int ret = -1;
+        client_t            *client        = NULL;
+        dict_t              *dict                = NULL;
+        char                 key[1024]            = {0};
+        upcall_client_entry *up_client_entry = NULL;
+        upcall_entry *up_entry = NULL;
+        int32_t         op_errno = ENOMEM;
+
+        client = frame->root->client;
+        frame->local = NULL;
+        
+        gf_log (this->name, GF_LOG_INFO, "In truncate ");
+        /* do we need to use loc->inode->gfid ?? */
+        PROCESS_DELEG (frame, client, loc->gfid,
+                       _gf_true, &up_entry);
+
+        STACK_WIND (frame, up_truncate_cbk,
+                    FIRST_CHILD(this), FIRST_CHILD(this)->fops->truncate,
+                    loc, offset, xdata);
+
+        return 0;
+
+err:
+        frame->local = NULL;
+        op_errno = (op_errno == -1) ? errno : op_errno;
+        STACK_UNWIND_STRICT (truncate, frame, -1, op_errno, NULL, NULL, NULL);
+
+        return 0;
+}
+
+int
+up_setattr_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
+                 int op_ret, int op_errno, struct iatt *statpre,
+                 struct iatt *statpost, dict_t *xdata)
+{
+        client_t         *client        = NULL;
+        upcall_entry     *up_entry = NULL;
+        uint32_t        flags;
+        int notify = 0;
+        upcall_client_entry * up_client_entry = NULL;
+        notify_event_data n_event_data;
+
+        client = frame->root->client;
+
+        if (op_ret < 0) {
+                goto out;
+        }
+        gf_log (this->name, GF_LOG_INFO, "In truncate_cbk ");
+        // setattr -> UP_SIZE or UP_OWN or UP_MODE or UP_TIMES -> INODE_UPDATE (or UP_PERM esp incase of ACLs -> INODE_INVALIDATE)
+        // Need to check what attr is changed and accordingly pass UP_FLAGS.
+        flags = (UP_SIZE | UP_TIMES | UP_OWN | UP_MODE | UP_PERM) ;
+        upcall_cache_invalidate (frame, client, statpost->ia_gfid, &flags);
+
+out:
+        frame->local = NULL;
+        STACK_UNWIND_STRICT (setattr, frame, op_ret, op_errno,
+                             statpre, statpost, xdata);
+        return 0;
+}
+
+int
+up_setattr (call_frame_t *frame, xlator_t *this, loc_t *loc,
+             struct iatt *stbuf, int32_t valid, dict_t *xdata)
+{
+        int ret = -1;
+        client_t            *client        = NULL;
+        dict_t              *dict                = NULL;
+        char                 key[1024]            = {0};
+        upcall_client_entry *up_client_entry = NULL;
+        upcall_entry *up_entry = NULL;
+        int32_t         op_errno = ENOMEM;
+
+        client = frame->root->client;
+        frame->local = NULL;
+        
+        gf_log (this->name, GF_LOG_INFO, "In setattr ");
+        /* do we need to use loc->inode->gfid ?? */
+        PROCESS_DELEG (frame, client, loc->gfid,
+                       _gf_true, &up_entry);
+
+        STACK_WIND (frame, up_setattr_cbk,
+                           FIRST_CHILD(this),
+                           FIRST_CHILD(this)->fops->setattr,
+                            loc, stbuf, valid, xdata);
+        return 0;
+
+err:
+        frame->local = NULL;
+        op_errno = (op_errno == -1) ? errno : op_errno;
+        STACK_UNWIND_STRICT (setattr, frame, -1, op_errno, NULL, NULL, NULL);
+
         return 0;
 }
 
@@ -1030,7 +1122,26 @@ struct xlator_fops fops = {
         .open        = up_open,
         .readv       = up_readv,
         .writev      = up_writev,
+        .truncate    = up_truncate,
         .lk          = up_lk,
+        .setattr     = up_setattr,
+        .rename      = up_rename,
+#ifdef WIP
+        .flush       = up_flush,
+        .remove      = up_remove,
+        .access      = up_access,
+        .link        = up_link, /* invalidate both file and parent dir */
+        .unlink      = up_unlink, /* invalidate both file and parent dir */
+        .rmdir       = up_rmdir, /* same as above */
+        .create      = up_create, /* may be needed to update dir inode entry */
+        .mkdir       = up_mkdir, /* for the same reason as above */
+        .symlink     = up_symlink, /* invalidate both file and parent dir maybe */
+        .readlink    = up_readlink, /* Needed? readlink same as read? */
+/*  other fops to be considered -
+ *   lookup, stat, opendir, readdir, readdirp, readlink, mknod, statfs, flush,
+ *   fsync
+ */ 
+#endif
 };
 
 struct xlator_cbks cbks = {
