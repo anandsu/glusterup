@@ -155,7 +155,8 @@ get_upcall_client_entry (call_frame_t *frame, uuid_t gfid, client_t* client, upc
                  gf_log (THIS->name, GF_LOG_INFO, "upcall_entry client added - %s", up_client_entry->client_uid);
                 
         }
-        frame->local = up_client_entry;
+        ((upcall_local_t *)(frame->local))->client = up_client_entry;
+
         return up_client_entry;
 }
 
@@ -377,8 +378,8 @@ remove_deleg (call_frame_t *frame, client_t *client, uuid_t gfid)
         upcall_client_entry * up_client_entry = NULL;
         upcall_entry * up_entry = NULL;
 
-        if (frame->local) {
-                up_client_entry = (upcall_client_entry *)frame->local;
+        if (((upcall_local_t *)frame->local)->client) {
+                up_client_entry = ((upcall_local_t *)frame->local)->client;
         } else {
                 up_client_entry = get_upcall_client_entry (frame, gfid, client, &up_entry);
                 if (!up_client_entry) {
@@ -398,8 +399,8 @@ add_deleg (call_frame_t *frame, client_t *client, uuid_t gfid, gf_boolean_t is_w
         upcall_client_entry * up_client_entry = NULL;
         upcall_entry * up_entry = NULL;
 
-        if (frame->local) {
-                up_client_entry = (upcall_client_entry *)frame->local;
+        if (((upcall_local_t *)frame->local)->client) {
+                up_client_entry = ((upcall_local_t *)frame->local)->client;
         } else {
                 up_client_entry = get_upcall_client_entry (frame, gfid, client, &up_entry);
                 if (!up_client_entry) {
@@ -441,9 +442,8 @@ upcall_cache_invalidate (call_frame_t *frame, client_t *client, uuid_t gfid, voi
         notify_event_data n_event_data;
         time_t t = time(NULL);
 
-        if (frame->local) {
-                up_client = (upcall_client_entry *)frame->local;
-                frame->local = NULL;
+        if (((upcall_local_t *)frame->local)->client) {
+                up_client = ((upcall_local_t *)frame->local)->client;
                 up_entry = get_upcall_entry(gfid);
         } else {
                 up_client = get_upcall_client_entry (frame, gfid, client, &up_entry);
@@ -499,20 +499,21 @@ up_open_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         int notify = 0;
         upcall_client_entry * up_client_entry = NULL;
         notify_event_data n_event_data;
+        upcall_local_t  *local = NULL;
 
         client = frame->root->client;
+        local = frame->local;
 
         if (op_ret < 0) {
                 goto unwind;
         }
         gf_log (this->name, GF_LOG_INFO, "In open_cbk ");
         flags = (UP_ATIME) ;
-        upcall_cache_invalidate (frame, client, fd->inode->gfid, &flags);
+        upcall_cache_invalidate (frame, client, local->gfid, &flags);
 
 
 unwind:
-        frame->local = NULL;
-        STACK_UNWIND_STRICT (open, frame, op_ret, op_errno, fd, xdata);
+        UPCALL_STACK_UNWIND (open, frame, op_ret, op_errno, fd, xdata);
 
         return 0;
 }
@@ -530,16 +531,22 @@ up_open (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
         upcall_entry *up_entry = NULL;
         int32_t         op_errno = ENOMEM;
         gf_boolean_t   is_write = _gf_false;
+        upcall_local_t *local = NULL;
+
+        local = upcall_local_init(frame, fd->inode->gfid);
+        if (!local) {
+                op_errno = ENOMEM;
+                goto err;
+        }
 
         client = frame->root->client;
-        frame->local = NULL;
 
         gf_log (this->name, GF_LOG_INFO, "In open ");
 
         if (flags & (O_WRONLY | O_RDWR)) {
                 is_write = _gf_true;
         }
-        PROCESS_DELEG (frame, client, fd->inode->gfid,
+        PROCESS_DELEG (frame, client, local->gfid,
                        is_write, &up_entry);
 
         STACK_WIND (frame, up_open_cbk,
@@ -549,10 +556,9 @@ up_open (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
         return 0;
 
 err:
-        frame->local = NULL;
         op_errno = (op_errno == -1) ? errno : op_errno;
-        STACK_UNWIND_STRICT (open, frame, -1, op_errno, NULL, NULL);
-        STACK_UNWIND_STRICT (readv, frame, -1, op_errno, NULL, 0, NULL, NULL, NULL);
+        UPCALL_STACK_UNWIND (open, frame, -1, op_errno, NULL, NULL);
+        UPCALL_STACK_UNWIND (readv, frame, -1, op_errno, NULL, 0, NULL, NULL, NULL);
 
         return 0;
 }
@@ -569,15 +575,17 @@ up_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         int notify = 0;
         upcall_client_entry * up_client_entry = NULL;
         notify_event_data n_event_data;
+        upcall_local_t  *local = NULL;
 
         client = frame->root->client;
+        local = frame->local;
 
         if (op_ret < 0) {
                 goto out;
         }
         gf_log (this->name, GF_LOG_INFO, "In writev_cbk ");
         flags = (UP_SIZE | UP_TIMES) ;
-        upcall_cache_invalidate (frame, client, postbuf->ia_gfid, &flags);
+        upcall_cache_invalidate (frame, client, local->gfid, &flags);
 #ifdef NOT_REQ
         up_entry->rpc = (rpcsvc_t *)(client->rpc);
         up_entry->trans = (rpc_transport_t *)client->trans; 
@@ -588,8 +596,7 @@ up_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 #endif
 
 out:
-        frame->local = NULL;
-        STACK_UNWIND_STRICT (writev, frame, op_ret, op_errno, prebuf, postbuf, xdata);
+        UPCALL_STACK_UNWIND (writev, frame, op_ret, op_errno, prebuf, postbuf, xdata);
         return 0;
 }
 
@@ -606,9 +613,15 @@ up_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
         upcall_client_entry *up_client_entry = NULL;
         upcall_entry *up_entry = NULL;
         int32_t         op_errno = ENOMEM;
+        upcall_local_t *local = NULL;
+
+        local = upcall_local_init(frame, fd->inode->gfid);
+        if (!local) {
+                op_errno = ENOMEM;
+                goto err;
+        }
 
         client = frame->root->client;
-        frame->local = NULL;
         
 #ifdef USE_XDATA_FOR_UPCALLS
         upcall_entry * up_entry = NULL;
@@ -651,7 +664,7 @@ up_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
         }
 #endif
         gf_log (this->name, GF_LOG_INFO, "In writev ");
-        PROCESS_DELEG (frame, client, fd->inode->gfid,
+        PROCESS_DELEG (frame, client, local->gfid,
                        _gf_true, &up_entry);
 
         STACK_WIND (frame, up_writev_cbk,
@@ -665,8 +678,7 @@ out:
        return ret;
 #endif
 err:
-//        STACK_UNWIND_STRICT (writev, frame, -1, op_errno, NULL, NULL, NULL);
-        frame->local = NULL;
+//        UPCALL_STACK_UNWIND (writev, frame, -1, op_errno, NULL, NULL, NULL);
         up_writev_cbk (frame, NULL, frame->this, -1, op_errno, NULL, NULL, NULL);
         return 0;
 }
@@ -684,19 +696,20 @@ up_readv_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         int notify = 0;
         upcall_client_entry * up_client_entry = NULL;
         notify_event_data n_event_data;
+        upcall_local_t  *local = NULL;
 
         client = frame->root->client;
+        local = frame->local;
 
         if (op_ret < 0) {
                 goto out;
         }
         gf_log (this->name, GF_LOG_INFO, "In readv_cbk ");
         flags = (UP_ATIME) ;
-        upcall_cache_invalidate (frame, client, stbuf->ia_gfid, &flags);
+        upcall_cache_invalidate (frame, client, local->gfid, &flags);
 
 out:
-        frame->local = NULL;
-        STACK_UNWIND_STRICT (readv, frame, op_ret, op_errno, vector, count, stbuf,
+        UPCALL_STACK_UNWIND (readv, frame, op_ret, op_errno, vector, count, stbuf,
                           iobref, xdata);
 
         return 0;
@@ -713,12 +726,18 @@ up_readv (call_frame_t *frame, xlator_t *this,
         upcall_client_entry *up_client_entry = NULL;
         upcall_entry *up_entry = NULL;
         int32_t         op_errno = ENOMEM;
+        upcall_local_t *local = NULL;
+
+        local = upcall_local_init(frame, fd->inode->gfid);
+        if (!local) {
+                op_errno = ENOMEM;
+                goto err;
+        }
 
         client = frame->root->client;
-        frame->local = NULL;
 
         gf_log (this->name, GF_LOG_INFO, "In readv ");
-        PROCESS_DELEG (frame, client, fd->inode->gfid,
+        PROCESS_DELEG (frame, client, local->gfid,
                        _gf_false, &up_entry);
 
         STACK_WIND (frame, up_readv_cbk,
@@ -728,9 +747,8 @@ up_readv (call_frame_t *frame, xlator_t *this,
         return 0;
 
 err:
-        frame->local = NULL;
         op_errno = (op_errno == -1) ? errno : op_errno;
-        STACK_UNWIND_STRICT (readv, frame, -1, op_errno, NULL, 0, NULL, NULL, NULL);
+        UPCALL_STACK_UNWIND (readv, frame, -1, op_errno, NULL, 0, NULL, NULL, NULL);
 
         return 0;
 }
@@ -740,18 +758,24 @@ up_lk_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                 int32_t op_ret, int32_t op_errno, struct gf_flock *lock,
                 dict_t *xdata)
 {
+        upcall_local_t  *local = NULL;
+        uint32_t        flags;
+        int notify = 0;
+        client_t *client = NULL;
+
+        client = frame->root->client;
+        local = frame->local;
+
         if (op_ret < 0) {
                 goto out;
         }
         gf_log (this->name, GF_LOG_INFO, "In lk_cbk ");
-        /* How do we get gfid??
         flags = (UP_ATIME) ;
-        upcall_cache_invalidate (frame, client, stbuf->ia_gfid, &flags); */
+        upcall_cache_invalidate (frame, client, local->gfid, &flags);
 
 out:
         gf_log (this->name, GF_LOG_INFO, "In lk_cbk ");
-        frame->local = NULL;
-        STACK_UNWIND_STRICT (lk, frame, op_ret, op_errno, lock, xdata);
+        UPCALL_STACK_UNWIND (lk, frame, op_ret, op_errno, lock, xdata);
         return 0;
 }
 
@@ -768,10 +792,16 @@ up_lk (call_frame_t *frame, xlator_t *this,
         upcall_entry *up_entry = NULL;
         int32_t op_errno = ENOMEM;
         gf_boolean_t is_write_deleg = _gf_false;
+        upcall_local_t *local = NULL;
+
+        local = upcall_local_init(frame, fd->inode->gfid);
+        if (!local) {
+                op_errno = ENOMEM;
+                goto err;
+        }
 
         gf_log (this->name, GF_LOG_INFO, "In up_lk ");
         client = frame->root->client;
-        frame->local = NULL;
         snprintf (key, sizeof (key), "set_delegation");
         ret = dict_get_ptr (xdata, key, (void **)&delegations_enabled);
         if (ret) {
@@ -793,7 +823,7 @@ up_lk (call_frame_t *frame, xlator_t *this,
          * XXX: Check if all this delegation conflict resolution is correct as per RFC
          */
         if (flock->l_type != GF_LK_F_UNLCK) {
-                PROCESS_DELEG (frame, client, fd->inode->gfid,
+                PROCESS_DELEG (frame, client, local->gfid,
                                _gf_true, &up_entry);
         }
 
@@ -803,21 +833,21 @@ up_lk (call_frame_t *frame, xlator_t *this,
                  * must contain the client entry.
                  */
                 if (!up_entry) {
-                        up_entry = get_upcall_entry (fd->inode->gfid);
+                        up_entry = get_upcall_entry (local->gfid);
                 }
                 switch (flock->l_type) {
                 case GF_LK_F_RDLCK:
                         is_write_deleg = _gf_false;
-                        ret = add_deleg (frame, client, fd->inode->gfid, is_write_deleg);
+                        ret = add_deleg (frame, client, local->gfid, is_write_deleg);
                         up_entry->deleg_cnt++;
                         break;
                 case GF_LK_F_WRLCK:
                         is_write_deleg = _gf_true;
-                        add_deleg (frame, client, fd->inode->gfid, is_write_deleg);
+                        add_deleg (frame, client, local->gfid, is_write_deleg);
                         up_entry->deleg_cnt++;
                         break;
                 case GF_LK_F_UNLCK:
-                        remove_deleg (frame, client, fd->inode->gfid);
+                        remove_deleg (frame, client, local->gfid);
                         up_entry->deleg_cnt--;
                         break;
                 }
@@ -832,7 +862,6 @@ up_lk (call_frame_t *frame, xlator_t *this,
 
 err:
 //        STACK_UNWIND (lk, frame, -1, op_errno, NULL, NULL);
-        frame->local = NULL;
         up_lk_cbk (frame, NULL, frame->this, -1, op_errno, NULL, NULL);
         return 0;
 }
@@ -848,19 +877,20 @@ up_truncate_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         int notify = 0;
         upcall_client_entry * up_client_entry = NULL;
         notify_event_data n_event_data;
+        upcall_local_t  *local = NULL;
 
         client = frame->root->client;
+        local = frame->local;
 
         if (op_ret < 0) {
                 goto out;
         }
         gf_log (this->name, GF_LOG_INFO, "In truncate_cbk ");
         flags = (UP_SIZE | UP_TIMES) ;
-        upcall_cache_invalidate (frame, client, postbuf->ia_gfid, &flags);
+        upcall_cache_invalidate (frame, client, local->gfid, &flags);
 
 out:
-        frame->local = NULL;
-        STACK_UNWIND_STRICT (truncate, frame, op_ret, op_errno,
+        UPCALL_STACK_UNWIND (truncate, frame, op_ret, op_errno,
                              prebuf, postbuf, xdata);
         return 0;
 }
@@ -876,13 +906,19 @@ up_truncate (call_frame_t *frame, xlator_t *this, loc_t *loc, off_t offset,
         upcall_client_entry *up_client_entry = NULL;
         upcall_entry *up_entry = NULL;
         int32_t         op_errno = ENOMEM;
+        upcall_local_t *local = NULL;
+
+        local = upcall_local_init(frame, loc->gfid);
+        if (!local) {
+                op_errno = ENOMEM;
+                goto err;
+        }
 
         client = frame->root->client;
-        frame->local = NULL;
         
         gf_log (this->name, GF_LOG_INFO, "In truncate ");
         /* do we need to use loc->inode->gfid ?? */
-        PROCESS_DELEG (frame, client, loc->gfid,
+        PROCESS_DELEG (frame, client, local->gfid,
                        _gf_true, &up_entry);
 
         STACK_WIND (frame, up_truncate_cbk,
@@ -892,9 +928,8 @@ up_truncate (call_frame_t *frame, xlator_t *this, loc_t *loc, off_t offset,
         return 0;
 
 err:
-        frame->local = NULL;
         op_errno = (op_errno == -1) ? errno : op_errno;
-        STACK_UNWIND_STRICT (truncate, frame, -1, op_errno, NULL, NULL, NULL);
+        UPCALL_STACK_UNWIND (truncate, frame, -1, op_errno, NULL, NULL, NULL);
 
         return 0;
 }
@@ -910,8 +945,10 @@ up_setattr_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         int notify = 0;
         upcall_client_entry * up_client_entry = NULL;
         notify_event_data n_event_data;
+        upcall_local_t  *local = NULL;
 
         client = frame->root->client;
+        local = frame->local;
 
         if (op_ret < 0) {
                 goto out;
@@ -920,11 +957,10 @@ up_setattr_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         // setattr -> UP_SIZE or UP_OWN or UP_MODE or UP_TIMES -> INODE_UPDATE (or UP_PERM esp incase of ACLs -> INODE_INVALIDATE)
         // Need to check what attr is changed and accordingly pass UP_FLAGS.
         flags = (UP_SIZE | UP_TIMES | UP_OWN | UP_MODE | UP_PERM) ;
-        upcall_cache_invalidate (frame, client, statpost->ia_gfid, &flags);
+        upcall_cache_invalidate (frame, client, local->gfid, &flags);
 
 out:
-        frame->local = NULL;
-        STACK_UNWIND_STRICT (setattr, frame, op_ret, op_errno,
+        UPCALL_STACK_UNWIND (setattr, frame, op_ret, op_errno,
                              statpre, statpost, xdata);
         return 0;
 }
@@ -940,13 +976,19 @@ up_setattr (call_frame_t *frame, xlator_t *this, loc_t *loc,
         upcall_client_entry *up_client_entry = NULL;
         upcall_entry *up_entry = NULL;
         int32_t         op_errno = ENOMEM;
+        upcall_local_t *local = NULL;
+
+        local = upcall_local_init(frame, loc->gfid);
+        if (!local) {
+                op_errno = ENOMEM;
+                goto err;
+        }
 
         client = frame->root->client;
-        frame->local = NULL;
         
         gf_log (this->name, GF_LOG_INFO, "In setattr ");
         /* do we need to use loc->inode->gfid ?? */
-        PROCESS_DELEG (frame, client, loc->gfid,
+        PROCESS_DELEG (frame, client, local->gfid,
                        _gf_true, &up_entry);
 
         STACK_WIND (frame, up_setattr_cbk,
@@ -956,11 +998,451 @@ up_setattr (call_frame_t *frame, xlator_t *this, loc_t *loc,
         return 0;
 
 err:
-        frame->local = NULL;
         op_errno = (op_errno == -1) ? errno : op_errno;
-        STACK_UNWIND_STRICT (setattr, frame, -1, op_errno, NULL, NULL, NULL);
+        UPCALL_STACK_UNWIND (setattr, frame, -1, op_errno, NULL, NULL, NULL);
 
         return 0;
+}
+
+int
+up_rename_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
+                   int32_t op_ret, int32_t op_errno, struct iatt *stbuf,
+                   struct iatt *preoldparent, struct iatt *postoldparent,
+                   struct iatt *prenewparent, struct iatt *postnewparent,
+                   dict_t *xdata)
+{
+        client_t         *client        = NULL;
+        upcall_entry     *up_entry = NULL;
+        uint32_t        flags;
+        int notify = 0;
+        upcall_client_entry * up_client_entry = NULL;
+        notify_event_data n_event_data;
+        upcall_local_t  *local = NULL;
+
+        client = frame->root->client;
+        local = frame->local;
+
+        if (op_ret < 0) {
+                goto out;
+        }
+        gf_log (this->name, GF_LOG_INFO, "In rename_cbk ");
+        flags = (UP_RENAME);
+        upcall_cache_invalidate (frame, client, local->gfid, &flags);
+
+        /* Need to invalidate old and new parent entries as well */
+        flags = (UP_TIMES);
+        upcall_cache_invalidate (frame, client, preoldparent->ia_gfid, &flags);
+        if (uuid_compare (preoldparent->ia_gfid, prenewparent->ia_gfid))
+                upcall_cache_invalidate (frame, client, prenewparent->ia_gfid, &flags);
+
+out:
+        UPCALL_STACK_UNWIND (rename, frame, op_ret, op_errno,
+                             stbuf, preoldparent, postoldparent,
+                             prenewparent, postnewparent, xdata);
+        return 0;
+}
+
+int
+up_rename (call_frame_t *frame, xlator_t *this,
+          loc_t *oldloc, loc_t *newloc, dict_t *xdata)
+{
+        int ret = -1;
+        client_t            *client        = NULL;
+        dict_t              *dict                = NULL;
+        char                 key[1024]            = {0};
+        upcall_client_entry *up_client_entry = NULL;
+        upcall_entry *up_entry = NULL;
+        int32_t         op_errno = ENOMEM;
+        upcall_local_t *local = NULL;
+
+        local = upcall_local_init(frame, oldloc->gfid);
+        if (!local) {
+                op_errno = ENOMEM;
+                goto err;
+        }
+
+        client = frame->root->client;
+        
+        gf_log (this->name, GF_LOG_INFO, "In rename ");
+        /* do we need to use loc->inode->gfid ?? */
+        PROCESS_DELEG (frame, client, local->gfid,
+                       _gf_true, &up_entry);
+
+        STACK_WIND (frame, up_rename_cbk,
+                    FIRST_CHILD(this), FIRST_CHILD(this)->fops->rename,
+                    oldloc, newloc, xdata);
+
+        return 0;
+
+err:
+        op_errno = (op_errno == -1) ? errno : op_errno;
+        UPCALL_STACK_UNWIND (rename, frame, -1, op_errno, NULL, NULL, NULL, NULL,
+                             NULL, NULL);
+
+        return 0;
+}
+
+int
+up_unlink_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
+                int op_ret, int op_errno, struct iatt *preparent,
+                struct iatt *postparent, dict_t *xdata)
+{
+        client_t         *client        = NULL;
+        upcall_entry     *up_entry = NULL;
+        uint32_t        flags;
+        int notify = 0;
+        upcall_client_entry * up_client_entry = NULL;
+        notify_event_data n_event_data;
+        upcall_local_t  *local = NULL;
+
+        client = frame->root->client;
+        local = frame->local;
+
+        if (op_ret < 0) {
+                goto out;
+        }
+        gf_log (this->name, GF_LOG_INFO, "In unlink_cbk ");
+        flags = (UP_NLINK | UP_TIMES) ;
+        /* how do we get files' gfid?? */
+        upcall_cache_invalidate (frame, client, local->gfid, &flags);
+        flags = (UP_TIMES) ;
+        /* invalidate parent's entry too */
+        upcall_cache_invalidate (frame, client, postparent->ia_gfid, &flags);
+
+out:
+        UPCALL_STACK_UNWIND (unlink, frame, op_ret, op_errno,
+                             preparent, postparent, xdata);
+        return 0;
+}
+
+int
+up_unlink (call_frame_t *frame, xlator_t *this, loc_t *loc, int xflag,
+              dict_t *xdata)
+{
+        int ret = -1;
+        client_t            *client        = NULL;
+        dict_t              *dict                = NULL;
+        char                 key[1024]            = {0};
+        upcall_client_entry *up_client_entry = NULL;
+        upcall_entry *up_entry = NULL;
+        int32_t         op_errno = ENOMEM;
+        upcall_local_t *local = NULL;
+
+        local = upcall_local_init(frame, loc->gfid);
+        if (!local) {
+                op_errno = ENOMEM;
+                goto err;
+        }
+
+        client = frame->root->client;
+        
+        gf_log (this->name, GF_LOG_INFO, "In unlink ");
+        /* do we need to use loc->inode->gfid ?? */
+        PROCESS_DELEG (frame, client, local->gfid,
+                       _gf_true, &up_entry);
+
+        STACK_WIND (frame, up_unlink_cbk,
+                    FIRST_CHILD(this), FIRST_CHILD(this)->fops->unlink,
+                    loc, xflag, xdata);
+
+        return 0;
+
+err:
+        op_errno = (op_errno == -1) ? errno : op_errno;
+        UPCALL_STACK_UNWIND (unlink, frame, -1, op_errno, NULL, NULL, NULL);
+
+        return 0;
+}
+
+int
+up_link_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
+                int op_ret, int op_errno, inode_t *inode, struct iatt *stbuf,
+                struct iatt *preparent, struct iatt *postparent, dict_t *xdata)
+{
+        client_t         *client        = NULL;
+        upcall_entry     *up_entry = NULL;
+        uint32_t        flags;
+        int notify = 0;
+        upcall_client_entry * up_client_entry = NULL;
+        notify_event_data n_event_data;
+        upcall_local_t  *local = NULL;
+
+        client = frame->root->client;
+        local = frame->local;
+
+        if (op_ret < 0) {
+                goto out;
+        }
+        gf_log (this->name, GF_LOG_INFO, "In link_cbk ");
+        flags = (UP_NLINK | UP_TIMES) ;
+        /* how do we get files' gfid?? */
+        upcall_cache_invalidate (frame, client, local->gfid, &flags);
+
+        /* do we need to update parent as well?? */
+out:
+        UPCALL_STACK_UNWIND (link, frame, op_ret, op_errno,
+                             inode, stbuf, preparent, postparent, xdata);
+        return 0;
+}
+
+int
+up_link (call_frame_t *frame, xlator_t *this, loc_t *oldloc,
+         loc_t *newloc, dict_t *xdata)
+{
+        int ret = -1;
+        client_t            *client        = NULL;
+        dict_t              *dict                = NULL;
+        char                 key[1024]            = {0};
+        upcall_client_entry *up_client_entry = NULL;
+        upcall_entry *up_entry = NULL;
+        int32_t         op_errno = ENOMEM;
+        upcall_local_t *local = NULL;
+
+        local = upcall_local_init(frame, oldloc->gfid);
+        if (!local) {
+                op_errno = ENOMEM;
+                goto err;
+        }
+
+        client = frame->root->client;
+        
+        gf_log (this->name, GF_LOG_INFO, "In link ");
+        /* do we need to use loc->inode->gfid ?? */
+        PROCESS_DELEG (frame, client, local->gfid,
+                       _gf_true, &up_entry);
+
+        STACK_WIND (frame, up_link_cbk,
+                    FIRST_CHILD(this), FIRST_CHILD(this)->fops->link,
+                    oldloc, newloc, xdata);
+
+        return 0;
+
+err:
+        op_errno = (op_errno == -1) ? errno : op_errno;
+        UPCALL_STACK_UNWIND (link, frame, -1, op_errno, NULL, NULL, NULL, NULL, NULL);
+
+        return 0;
+}
+
+int
+up_rmdir_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
+                int op_ret, int op_errno, struct iatt *preparent,
+                struct iatt *postparent, dict_t *xdata)
+{
+        client_t         *client        = NULL;
+        upcall_entry     *up_entry = NULL;
+        uint32_t        flags;
+        int notify = 0;
+        upcall_client_entry * up_client_entry = NULL;
+        notify_event_data n_event_data;
+        upcall_local_t  *local = NULL;
+
+        client = frame->root->client;
+        local = frame->local;
+
+        if (op_ret < 0) {
+                goto out;
+        }
+        gf_log (this->name, GF_LOG_INFO, "In rmdir_cbk ");
+        flags = (UP_NLINK | UP_TIMES) ;
+        /* how do we get files' gfid?? */
+        upcall_cache_invalidate (frame, client, local->gfid, &flags);
+        flags = (UP_TIMES) ;
+        /* invalidate parent's entry too */
+        upcall_cache_invalidate (frame, client, postparent->ia_gfid, &flags);
+
+out:
+        UPCALL_STACK_UNWIND (rmdir, frame, op_ret, op_errno,
+                             preparent, postparent, xdata);
+        return 0;
+}
+
+int
+up_rmdir (call_frame_t *frame, xlator_t *this, loc_t *loc, int flags,
+              dict_t *xdata)
+{
+        int ret = -1;
+        client_t            *client        = NULL;
+        dict_t              *dict                = NULL;
+        char                 key[1024]            = {0};
+        upcall_client_entry *up_client_entry = NULL;
+        upcall_entry *up_entry = NULL;
+        int32_t         op_errno = ENOMEM;
+        upcall_local_t *local = NULL;
+
+        local = upcall_local_init(frame, loc->gfid);
+        if (!local) {
+                op_errno = ENOMEM;
+                goto err;
+        }
+
+        client = frame->root->client;
+        
+        gf_log (this->name, GF_LOG_INFO, "In rmdir ");
+        /* do we need to use loc->inode->gfid ?? */
+        PROCESS_DELEG (frame, client, local->gfid,
+                       _gf_true, &up_entry);
+
+        STACK_WIND (frame, up_rmdir_cbk,
+                    FIRST_CHILD(this), FIRST_CHILD(this)->fops->rmdir,
+                    loc, flags, xdata);
+
+        return 0;
+
+err:
+        op_errno = (op_errno == -1) ? errno : op_errno;
+        UPCALL_STACK_UNWIND (rmdir, frame, -1, op_errno, NULL, NULL, NULL);
+
+        return 0;
+}
+
+int
+up_mkdir_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
+                int op_ret, int op_errno, inode_t *inode,
+                struct iatt *stbuf, struct iatt *preparent,
+                struct iatt *postparent, dict_t *xdata)
+{
+        client_t         *client        = NULL;
+        upcall_entry     *up_entry = NULL;
+        uint32_t        flags;
+        int notify = 0;
+        upcall_client_entry * up_client_entry = NULL;
+        notify_event_data n_event_data;
+        upcall_local_t  *local = NULL;
+
+        client = frame->root->client;
+        local = frame->local;
+
+        if (op_ret < 0) {
+                goto out;
+        }
+        gf_log (this->name, GF_LOG_INFO, "In mkdir_cbk ");
+        flags = (UP_NLINK | UP_TIMES) ;
+        /* how do we get files' gfid?? */
+        upcall_cache_invalidate (frame, client, local->gfid, &flags);
+        flags = (UP_TIMES) ;
+        /* invalidate parent's entry too */
+        upcall_cache_invalidate (frame, client, postparent->ia_gfid, &flags);
+
+out:
+        UPCALL_STACK_UNWIND (mkdir, frame, op_ret, op_errno,
+                             inode, stbuf, preparent, postparent, xdata);
+        return 0;
+}
+
+int
+up_mkdir (call_frame_t *frame, xlator_t *this,
+          loc_t *loc, mode_t mode, mode_t umask, dict_t *params)
+{
+        int ret = -1;
+        client_t            *client        = NULL;
+        dict_t              *dict                = NULL;
+        char                 key[1024]            = {0};
+        upcall_client_entry *up_client_entry = NULL;
+        upcall_entry *up_entry = NULL;
+        int32_t         op_errno = ENOMEM;
+        upcall_local_t *local = NULL;
+
+        local = upcall_local_init(frame, loc->gfid);
+        if (!local) {
+                op_errno = ENOMEM;
+                goto err;
+        }
+
+        client = frame->root->client;
+        
+        gf_log (this->name, GF_LOG_INFO, "In mkdir ");
+
+        /* no need of delegation recall as we do not support
+         * directory delegations 
+        PROCESS_DELEG (frame, client, local->gfid,
+                       _gf_true, &up_entry); */
+
+        STACK_WIND (frame, up_mkdir_cbk,
+                    FIRST_CHILD(this), FIRST_CHILD(this)->fops->mkdir,
+                    loc, mode, umask, params);
+
+        return 0;
+
+err:
+        op_errno = (op_errno == -1) ? errno : op_errno;
+        UPCALL_STACK_UNWIND (mkdir, frame, -1, op_errno, NULL, NULL, NULL, NULL, NULL);
+
+        return 0;
+}
+
+int
+up_create_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
+                int op_ret, int op_errno, fd_t *fd, inode_t *inode,
+                struct iatt *stbuf, struct iatt *preparent,
+                struct iatt *postparent, dict_t *xdata)
+{
+        client_t         *client        = NULL;
+        upcall_entry     *up_entry = NULL;
+        uint32_t        flags;
+        int notify = 0;
+        upcall_client_entry * up_client_entry = NULL;
+        notify_event_data n_event_data;
+        upcall_local_t  *local = NULL;
+
+        client = frame->root->client;
+        local = frame->local;
+
+        if (op_ret < 0) {
+                goto out;
+        }
+        gf_log (this->name, GF_LOG_INFO, "In create_cbk ");
+        flags = (UP_NLINK | UP_TIMES) ;
+        /* how do we get files' gfid?? */
+        upcall_cache_invalidate (frame, client, local->gfid, &flags);
+        flags = (UP_TIMES) ;
+        /* invalidate parent's entry too */
+        upcall_cache_invalidate (frame, client, postparent->ia_gfid, &flags);
+
+out:
+        UPCALL_STACK_UNWIND (create, frame, op_ret, op_errno, fd,
+                             inode, stbuf, preparent, postparent, xdata);
+        return 0;
+}
+
+int
+up_create (call_frame_t *frame, xlator_t *this,
+          loc_t *loc, int32_t flags, mode_t mode,
+          mode_t umask, fd_t * fd, dict_t *params)
+{
+        int ret = -1;
+        client_t            *client        = NULL;
+        dict_t              *dict                = NULL;
+        char                 key[1024]            = {0};
+        upcall_client_entry *up_client_entry = NULL;
+        upcall_entry *up_entry = NULL;
+        int32_t         op_errno = ENOMEM;
+        upcall_local_t *local = NULL;
+
+        local = upcall_local_init(frame, loc->gfid);
+        if (!local) {
+                op_errno = ENOMEM;
+                goto err;
+        }
+
+        client = frame->root->client;
+        
+        gf_log (this->name, GF_LOG_INFO, "In create ");
+
+        /* no need of delegation recall as we do not support
+         * directory delegations 
+        PROCESS_DELEG (frame, client, local->gfid,
+                       _gf_true, &up_entry); */
+
+        STACK_WIND (frame, up_create_cbk,
+                    FIRST_CHILD(this), FIRST_CHILD(this)->fops->create,
+                    loc, flags, mode, umask, fd, params);
+
+        return 0;
+
+err:
+        op_errno = (op_errno == -1) ? errno : op_errno;
+        UPCALL_STACK_UNWIND (create, frame, -1, op_errno, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 int32_t
@@ -980,6 +1462,26 @@ mem_acct_init (xlator_t *this)
         }
 
         return ret;
+}
+
+void
+upcall_local_wipe (xlator_t *this, upcall_local_t *local)
+{
+        if (local)
+                mem_put (local);
+}
+
+upcall_local_t *
+upcall_local_init (call_frame_t *frame, uuid_t gfid)
+{
+        upcall_local_t *local = NULL;
+        local = mem_get0 (THIS->local_pool);
+        if (!local)
+                goto out;
+        uuid_copy (local->gfid, gfid);
+        frame->local = local;
+out:
+        return local;
 }
 
 int
@@ -1004,6 +1506,7 @@ init (xlator_t *this)
         INIT_LIST_HEAD (&upcall_entry_list.client.client_list);
         pthread_mutex_init (&u_mutex, NULL); 
         upcall_entry_list.deleg_cnt = 0;
+        this->local_pool = mem_pool_new (upcall_local_t, 512);
 out:
 	if (ret) {
 		GF_FREE (priv);
@@ -1126,15 +1629,18 @@ struct xlator_fops fops = {
         .lk          = up_lk,
         .setattr     = up_setattr,
         .rename      = up_rename,
-#ifdef WIP
-        .flush       = up_flush,
-        .remove      = up_remove,
-        .access      = up_access,
-        .link        = up_link, /* invalidate both file and parent dir */
         .unlink      = up_unlink, /* invalidate both file and parent dir */
         .rmdir       = up_rmdir, /* same as above */
+        .link        = up_link, /* invalidate both file and parent dir */
         .create      = up_create, /* may be needed to update dir inode entry */
         .mkdir       = up_mkdir, /* for the same reason as above */
+#ifdef WIP
+        .remove      = up_remove,
+        .flush       = up_flush,
+        .getattr     = up_getattr, /* ?? */
+        .getxattr    = up_getxattr, /* ?? */
+        .setxattr    = up_setxattr, /* ?? */
+        .access      = up_access,
         .symlink     = up_symlink, /* invalidate both file and parent dir maybe */
         .readlink    = up_readlink, /* Needed? readlink same as read? */
 /*  other fops to be considered -

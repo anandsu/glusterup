@@ -39,6 +39,28 @@
 #define UP_DESTROY_FLAG 0x00000200   /* clear destroyIfDelInode flag */
 #define UP_GANESHA      0x00000400   /* this is a ganesha op */
 
+#define UPCALL_STACK_UNWIND(fop, frame, params ...) do {        \
+        upcall_local_t *__local = NULL;                         \
+        xlator_t *__xl          = NULL;                         \
+        if (frame) {                                            \
+                        __xl         = frame->this;             \
+                        __local      = frame->local;            \
+                        frame->local = NULL;                    \
+                }                                               \
+                STACK_UNWIND_STRICT (fop, frame, params);       \
+                upcall_local_wipe (__xl, __local);                 \
+        } while (0)
+
+#define UPCALL_STACK_DESTROY(frame) do {                   \
+                upcall_local_t *__local = NULL;            \
+                xlator_t    *__xl    = NULL;            \
+                __xl                 = frame->this;     \
+                __local              = frame->local;    \
+                frame->local         = NULL;            \
+                STACK_DESTROY (frame->root);            \
+                upcall_local_wipe (__xl, __local);         \
+        } while (0)
+
 struct _upcalls_private_t {
 	int client_id;
 };
@@ -103,6 +125,15 @@ typedef struct _notify_event_data notify_event_data;
  * tree data structures
  */
 upcall_entry upcall_entry_list;
+
+struct upcall_local {
+        upcall_client_entry *client;
+        uuid_t   gfid;
+};
+typedef struct upcall_local upcall_local_t;
+
+void upcall_local_wipe (xlator_t *this, upcall_local_t *local);
+upcall_local_t * upcall_local_init (call_frame_t *frame, uuid_t gfid);
 
 upcall_entry * get_upcall_entry (uuid_t gfid);
 upcall_client_entry* get_upcall_client_entry (call_frame_t *frame, uuid_t gfid,
