@@ -135,16 +135,18 @@ typedef struct upcall_local upcall_local_t;
 void upcall_local_wipe (xlator_t *this, upcall_local_t *local);
 upcall_local_t * upcall_local_init (call_frame_t *frame, uuid_t gfid);
 
+upcall_entry* add_upcall_entry (uuid_t gfid);
 upcall_entry * get_upcall_entry (uuid_t gfid);
+upcall_client_entry* add_upcall_client_entry (call_frame_t *frame, uuid_t gfid,
+                                              client_t* client,
+                                              upcall_entry **up_entry);
 upcall_client_entry* get_upcall_client_entry (call_frame_t *frame, uuid_t gfid,
-                                              client_t* client, upcall_entry **up_entry);
+                                              client_t* client,
+                                              upcall_entry **up_entry);
 int upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                     gf_boolean_t is_write, upcall_entry **up_entry);
 int remove_deleg (call_frame_t *frame, client_t *client, uuid_t gfid);
 int add_deleg (call_frame_t *frame, client_t *client, uuid_t gfid, gf_boolean_t is_write);
 int upcall_cache_invalidate (call_frame_t *frame, client_t *client, uuid_t gfid, void *extra);
-//int add_upcall_entry (upcall_entry * up_entry);
-//int get_client_entry (client_t *client, uuid_t gfid, upcall_client_entry * up_client_entry);
-//int add_client_entry (upcall_entry * up_entry, upcall_client_entry * up_client_entry);
 
 #endif /* __UPCALLS_INFRA_H__ */

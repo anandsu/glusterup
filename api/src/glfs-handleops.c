@@ -1566,7 +1566,7 @@ glfs_h_upcall (struct glfs *fs, void * data)
                 pthread_mutex_lock (&u_mutex);
         }
         /* If found no other thread can delete this u_list entry */
-        pthread_mutex_unlock (&u_mutex);
+//        pthread_mutex_unlock (&u_mutex);
         if (found) {
                 //found entry for this volume 
                 glhandle = GF_CALLOC (1, sizeof(struct glfs_object),
@@ -1598,7 +1598,7 @@ glfs_h_upcall (struct glfs *fs, void * data)
                         gf_log (subvol->name, GF_LOG_WARNING, "Reason - BREAK_DELEGATION");
                         break;
                 }
-                pthread_mutex_lock (&u_mutex);
+//                pthread_mutex_lock (&u_mutex);
                 list_del_init (&u_list->upcall_entries);
                 GF_FREE (u_list);
                 pthread_mutex_unlock (&u_mutex);

@@ -3,7 +3,7 @@ xlatordir = $(libdir)/glusterfs/$(PACKAGE_VERSION)/xlator/features
 
 upcalls_la_LDFLAGS = -module -avoid-version
 
-upcalls_la_SOURCES = upcalls.c
+upcalls_la_SOURCES = upcalls.c upcalls-internal.c
 
 upcalls_la_LIBADD = $(top_builddir)/libglusterfs/src/libglusterfs.la \
         $(top_builddir)/rpc/rpc-lib/src/libgfrpc.la \
