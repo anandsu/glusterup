@@ -82,8 +82,8 @@ get_upcall_entry (uuid_t gfid)
                         /* found entry */
                         return up_entry;
                 }
-                pthread_mutex_unlock (&u_mutex);
-                pthread_mutex_lock (&u_mutex);
+//                pthread_mutex_unlock (&u_mutex);
+  //              pthread_mutex_lock (&u_mutex);
         }
         pthread_mutex_unlock (&u_mutex);
 
@@ -157,8 +157,8 @@ get_upcall_client_entry (call_frame_t *frame, uuid_t gfid, client_t* client,
                                 break;
                         }
                 }
-                pthread_mutex_unlock (&(*up_entry)->u_client_mutex);
-                pthread_mutex_lock (&(*up_entry)->u_client_mutex);
+//                pthread_mutex_unlock (&(*up_entry)->u_client_mutex);
+  //              pthread_mutex_lock (&(*up_entry)->u_client_mutex);
         }
         pthread_mutex_unlock (&(*up_entry)->u_client_mutex);
 
@@ -384,8 +384,8 @@ upcall_deleg_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                                 }
                         }
                 }
-                pthread_mutex_unlock (&(*up_entry)->u_client_mutex);
-                pthread_mutex_lock (&(*up_entry)->u_client_mutex);
+//                pthread_mutex_unlock (&(*up_entry)->u_client_mutex);
+  //              pthread_mutex_lock (&(*up_entry)->u_client_mutex);
         }
 unlock:
         pthread_mutex_unlock (&(*up_entry)->u_client_mutex);
@@ -511,8 +511,8 @@ upcall_cache_invalidate (call_frame_t *frame, client_t *client, uuid_t gfid, voi
                                  }
                         }
                 }
-                pthread_mutex_unlock (&up_entry->u_client_mutex);
-                pthread_mutex_lock (&up_entry->u_client_mutex);
+//                pthread_mutex_unlock (&up_entry->u_client_mutex);
+  //              pthread_mutex_lock (&up_entry->u_client_mutex);
         }
         pthread_mutex_unlock (&up_entry->u_client_mutex);
         return 0;

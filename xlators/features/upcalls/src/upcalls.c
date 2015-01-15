@@ -127,7 +127,7 @@ up_open (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
         return 0;
 
 err:
-        op_errno = (op_errno == -1) ? errno : op_errno;
+//        op_errno = (op_errno == -1) ? errno : op_errno;
         UPCALL_STACK_UNWIND (open, frame, -1, op_errno, NULL, NULL);
         return 0;
 }
@@ -263,7 +263,7 @@ up_readv (call_frame_t *frame, xlator_t *this,
         return 0;
 
 err:
-        op_errno = (op_errno == -1) ? errno : op_errno;
+        //op_errno = (op_errno == -1) ? errno : op_errno;
         UPCALL_STACK_UNWIND (readv, frame, -1, op_errno, NULL, 0, NULL, NULL, NULL);
 
         return 0;
@@ -278,17 +278,61 @@ up_lk_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         uint32_t        flags;
         int notify = 0;
         client_t *client = NULL;
+        upcall_entry *up_entry = NULL;
+        gf_boolean_t is_write_deleg = _gf_false;
+        int ret = -1;
 
         client = frame->root->client;
         local = frame->local;
 
         if (op_ret < 0) {
+                gf_log (this->name, GF_LOG_INFO, "In lk_cbk op_ret = %d", op_ret);
                 goto out;
         }
         gf_log (this->name, GF_LOG_INFO, "In lk_cbk ");
+        if (local->is_delegation_enabled) {
+                gf_log (this->name, GF_LOG_INFO, "In up_lk_cbk, in"
+                        " is_delegation_enabled block");
+                /* Add the delegation
+                 * Client must have been created. So frame->root->client
+                 * must contain the client entry.
+                 */
+                if (!up_entry) {
+                        up_entry = get_upcall_entry (local->gfid);
+                }
+                switch (lock->l_type) {
+                case GF_LK_F_RDLCK:
+                        is_write_deleg = _gf_false;
+                        ret = add_deleg (frame, client, local->gfid, is_write_deleg);
+                        if (ret < 0 ) {
+                                goto err;
+                        }
+                        up_entry->deleg_cnt++;
+                        break;
+                case GF_LK_F_WRLCK:
+                        is_write_deleg = _gf_true;
+                        ret = add_deleg (frame, client, local->gfid, is_write_deleg);
+                        if (ret < 0 ) {
+                                goto err;
+                        }
+                        up_entry->deleg_cnt++;
+                        break;
+                case GF_LK_F_UNLCK:
+                        ret = remove_deleg (frame, client, local->gfid);
+                        if (ret < 0 ) {
+                                goto err;
+                        }
+                        up_entry->deleg_cnt--;
+                        break;
+                }
+        }
         flags = (UP_ATIME) ;
         upcall_cache_invalidate (frame, client, local->gfid, &flags);
+        goto out;
 
+err:
+        op_ret = ret;
+        op_errno = EINVAL;
 out:
         gf_log (this->name, GF_LOG_INFO, "In lk_cbk ");
         UPCALL_STACK_UNWIND (lk, frame, op_ret, op_errno, lock, xdata);
@@ -302,7 +346,7 @@ up_lk (call_frame_t *frame, xlator_t *this,
         int ret = -1;
         client_t            *client        = NULL;
         dict_t              *dict                = NULL;
-        gf_boolean_t            delegations_enabled = 0;
+        int32_t         is_delegation_enabled = 0;
         char                 key[1024]            = {0};
         upcall_client_entry *up_client_entry = NULL;
         upcall_entry *up_entry = NULL;
@@ -319,11 +363,13 @@ up_lk (call_frame_t *frame, xlator_t *this,
         gf_log (this->name, GF_LOG_INFO, "In up_lk ");
         client = frame->root->client;
         snprintf (key, sizeof (key), "set_delegation");
-        ret = dict_get_ptr (xdata, key, (void *)&delegations_enabled);
+        ret = dict_get_int32 (xdata, key, (void *)&is_delegation_enabled);
         if (ret) {
-                errno = EINVAL;
+                op_errno = EINVAL;
                 goto err;
         }
+        gf_log (this->name, GF_LOG_INFO, "In up_lk, is_delegation_enabled = %d ",
+                is_delegation_enabled);
         dict_del (xdata, key);
 
         /* Either lock/delegation request, first check if there
@@ -343,33 +389,10 @@ up_lk (call_frame_t *frame, xlator_t *this,
                                _gf_true, &up_entry);
         }
 
-        if (delegations_enabled) {
-                /* Add the delegation
-                 * Client must have been created. So frame->root->client
-                 * must contain the client entry.
-                 */
-                if (!up_entry) {
-                        up_entry = get_upcall_entry (local->gfid);
-                }
-                switch (flock->l_type) {
-                case GF_LK_F_RDLCK:
-                        is_write_deleg = _gf_false;
-                        ret = add_deleg (frame, client, local->gfid, is_write_deleg);
-                        up_entry->deleg_cnt++;
-                        break;
-                case GF_LK_F_WRLCK:
-                        is_write_deleg = _gf_true;
-                        add_deleg (frame, client, local->gfid, is_write_deleg);
-                        up_entry->deleg_cnt++;
-                        break;
-                case GF_LK_F_UNLCK:
-                        remove_deleg (frame, client, local->gfid);
-                        up_entry->deleg_cnt--;
-                        break;
-                }
-                if (ret < 0) {
-                        goto err;
-                }
+        if (is_delegation_enabled) {
+                gf_log (this->name, GF_LOG_INFO, "In up_lk, in"
+                        " is_delegation_enabled block");
+                local->is_delegation_enabled = _gf_true;
         }
  
         STACK_WIND (frame, up_lk_cbk, FIRST_CHILD(this), FIRST_CHILD(this)->fops->lk,
@@ -377,6 +400,7 @@ up_lk (call_frame_t *frame, xlator_t *this,
         return 0;
 
 err:
+        gf_log (this->name, GF_LOG_INFO, "In up_lk err section, ret = %d, op_errno=%d", ret, op_errno);
 //        STACK_UNWIND (lk, frame, -1, op_errno, NULL, NULL);
         up_lk_cbk (frame, NULL, frame->this, -1, op_errno, NULL, NULL);
         return 0;
@@ -444,7 +468,7 @@ up_truncate (call_frame_t *frame, xlator_t *this, loc_t *loc, off_t offset,
         return 0;
 
 err:
-        op_errno = (op_errno == -1) ? errno : op_errno;
+        //op_errno = (op_errno == -1) ? errno : op_errno;
         UPCALL_STACK_UNWIND (truncate, frame, -1, op_errno, NULL, NULL, NULL);
 
         return 0;
@@ -514,7 +538,7 @@ up_setattr (call_frame_t *frame, xlator_t *this, loc_t *loc,
         return 0;
 
 err:
-        op_errno = (op_errno == -1) ? errno : op_errno;
+       // op_errno = (op_errno == -1) ? errno : op_errno;
         UPCALL_STACK_UNWIND (setattr, frame, -1, op_errno, NULL, NULL, NULL);
 
         return 0;
@@ -591,7 +615,7 @@ up_rename (call_frame_t *frame, xlator_t *this,
         return 0;
 
 err:
-        op_errno = (op_errno == -1) ? errno : op_errno;
+        //op_errno = (op_errno == -1) ? errno : op_errno;
         UPCALL_STACK_UNWIND (rename, frame, -1, op_errno, NULL, NULL, NULL, NULL,
                              NULL, NULL);
 
@@ -664,7 +688,7 @@ up_unlink (call_frame_t *frame, xlator_t *this, loc_t *loc, int xflag,
         return 0;
 
 err:
-        op_errno = (op_errno == -1) ? errno : op_errno;
+//        op_errno = (op_errno == -1) ? errno : op_errno;
         UPCALL_STACK_UNWIND (unlink, frame, -1, op_errno, NULL, NULL, NULL);
 
         return 0;
@@ -734,7 +758,7 @@ up_link (call_frame_t *frame, xlator_t *this, loc_t *oldloc,
         return 0;
 
 err:
-        op_errno = (op_errno == -1) ? errno : op_errno;
+//        op_errno = (op_errno == -1) ? errno : op_errno;
         UPCALL_STACK_UNWIND (link, frame, -1, op_errno, NULL, NULL, NULL, NULL, NULL);
 
         return 0;
@@ -806,7 +830,7 @@ up_rmdir (call_frame_t *frame, xlator_t *this, loc_t *loc, int flags,
         return 0;
 
 err:
-        op_errno = (op_errno == -1) ? errno : op_errno;
+        //op_errno = (op_errno == -1) ? errno : op_errno;
         UPCALL_STACK_UNWIND (rmdir, frame, -1, op_errno, NULL, NULL, NULL);
 
         return 0;
@@ -881,7 +905,7 @@ up_mkdir (call_frame_t *frame, xlator_t *this,
         return 0;
 
 err:
-        op_errno = (op_errno == -1) ? errno : op_errno;
+        //op_errno = (op_errno == -1) ? errno : op_errno;
         UPCALL_STACK_UNWIND (mkdir, frame, -1, op_errno, NULL, NULL, NULL, NULL, NULL);
 
         return 0;
@@ -957,7 +981,7 @@ up_create (call_frame_t *frame, xlator_t *this,
         return 0;
 
 err:
-        op_errno = (op_errno == -1) ? errno : op_errno;
+//        op_errno = (op_errno == -1) ? errno : op_errno;
         UPCALL_STACK_UNWIND (create, frame, -1, op_errno, NULL, NULL, NULL, NULL, NULL, NULL);
         return 0;
 }
@@ -996,6 +1020,7 @@ upcall_local_init (call_frame_t *frame, uuid_t gfid)
         if (!local)
                 goto out;
         uuid_copy (local->gfid, gfid);
+        local->is_delegation_enabled = _gf_false;
         frame->local = local;
 out:
         return local;

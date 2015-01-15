@@ -1562,8 +1562,8 @@ glfs_h_upcall (struct glfs *fs, void * data)
                         break;
                 }
                 /* To reduce contention */
-                pthread_mutex_unlock (&u_mutex);
-                pthread_mutex_lock (&u_mutex);
+//                pthread_mutex_unlock (&u_mutex);
+  //              pthread_mutex_lock (&u_mutex);
         }
         /* If found no other thread can delete this u_list entry */
 //        pthread_mutex_unlock (&u_mutex);
@@ -1601,8 +1601,8 @@ glfs_h_upcall (struct glfs *fs, void * data)
 //                pthread_mutex_lock (&u_mutex);
                 list_del_init (&u_list->upcall_entries);
                 GF_FREE (u_list);
-                pthread_mutex_unlock (&u_mutex);
         }
+        pthread_mutex_unlock (&u_mutex);
 
         /* Instead of glfs_h_stat , maybe there could be a simple way
          * of fetching attributes

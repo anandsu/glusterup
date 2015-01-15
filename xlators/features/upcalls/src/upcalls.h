@@ -129,6 +129,7 @@ upcall_entry upcall_entry_list;
 struct upcall_local {
         upcall_client_entry *client;
         uuid_t   gfid;
+        gf_boolean_t is_delegation_enabled;
 };
 typedef struct upcall_local upcall_local_t;
 
