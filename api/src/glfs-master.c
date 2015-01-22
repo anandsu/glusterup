@@ -103,7 +103,7 @@ notify (xlator_t *this, int event, void *data, ...)
 	case GF_EVENT_CHILD_CONNECTING:
 		break;
         case GF_EVENT_UPCALL:
-                glfs_upcall(data);
+                glfs_upcall(fs, data);
 	default:
 		gf_log (this->name, GF_LOG_DEBUG,
 			"got notify event %d", event);

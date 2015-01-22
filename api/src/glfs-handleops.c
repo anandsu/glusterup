@@ -1552,8 +1552,8 @@ glfs_h_upcall (struct glfs *fs, void * data)
                 goto out;
         }
 
-        pthread_mutex_lock (&u_mutex);
-        list_for_each_entry (u_list, &u_root.upcall_entries, upcall_entries) {
+        pthread_mutex_lock (&fs->u_mutex);
+        list_for_each_entry (u_list, &fs->u_root.upcall_entries, upcall_entries) {
                 uuid_copy (gfid, u_list->gfid);
                 gf_log (subvol->name, GF_LOG_WARNING, "In list");
                 if ((newinode = inode_find (subvol->itable, gfid))) {
@@ -1574,7 +1574,7 @@ glfs_h_upcall (struct glfs *fs, void * data)
                 if (glhandle == NULL) {
                         errno = ENOMEM;
 //                                ret = -1;
-                        pthread_mutex_unlock (&u_mutex);
+                        pthread_mutex_unlock (&fs->u_mutex);
                         goto out;
                 }
 
@@ -1602,7 +1602,7 @@ glfs_h_upcall (struct glfs *fs, void * data)
                 list_del_init (&u_list->upcall_entries);
                 GF_FREE (u_list);
         }
-        pthread_mutex_unlock (&u_mutex);
+        pthread_mutex_unlock (&fs->u_mutex);
 
         /* Instead of glfs_h_stat , maybe there could be a simple way
          * of fetching attributes

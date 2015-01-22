@@ -27,7 +27,7 @@
 #define READDIRBUF_SIZE (sizeof(struct dirent) + GF_NAME_MAX + 1)
 
 void
-glfs_upcall (void *data)
+glfs_upcall (struct glfs *fs, void *data)
 {
         int ret = -1;
         inode_t *inode = NULL;
@@ -52,9 +52,9 @@ glfs_upcall (void *data)
         u_list->event_type = up_req.event_type;
         u_list->flags = (uint32_t)(up_req.flags);
 
-        pthread_mutex_lock (&u_mutex);
-        list_add_tail (&u_list->upcall_entries, &u_root.upcall_entries);
-        pthread_mutex_unlock (&u_mutex);
+        pthread_mutex_lock (&fs->u_mutex);
+        list_add_tail (&u_list->upcall_entries, &fs->u_root.upcall_entries);
+        pthread_mutex_unlock (&fs->u_mutex);
 /*        inode = inode_find (subvol->itable, gfid); 
         object = GF_CALLOC (1, sizeof(struct glfs_object),
                             glfs_mt_glfs_object_t);

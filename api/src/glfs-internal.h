@@ -78,6 +78,23 @@ struct glfs;
 
 typedef int (*glfs_init_cbk) (struct glfs *fs, int ret);
 
+enum upcall_event_type_t {
+        CACHE_INVALIDATION,
+        RECALL_READ_DELEG,
+        RECALL_READ_WRITE_DELEG
+};
+typedef enum upcall_event_type_t upcall_event_type;
+
+// have to make "fs" specific
+struct _upcall_list {
+        struct list_head upcall_entries;
+        uuid_t gfid;
+        upcall_event_type event_type;
+        uint32_t flags;
+        //deleg_type
+};
+typedef struct _upcall_list upcall_list;
+
 struct glfs {
 	char               *volname;
         uuid_t              vol_uuid;
@@ -107,6 +124,9 @@ struct glfs {
 	struct list_head    openfds;
 
 	gf_boolean_t        migration_in_progress;
+
+        upcall_list u_root;
+        pthread_mutex_t     u_mutex; /* mutex for upcall_list */
 };
 
 struct glfs_fd {
@@ -136,26 +156,6 @@ struct callback_arg
         struct stat *buf;
         uint32_t *expire_attr;
 };
-
-enum upcall_event_type_t {
-        CACHE_INVALIDATION,
-        RECALL_READ_DELEG,
-        RECALL_READ_WRITE_DELEG
-};
-typedef enum upcall_event_type_t upcall_event_type;
-
-// have to make "fs" specific
-struct _upcall_list {
-        struct list_head upcall_entries;
-        uuid_t gfid;
-        upcall_event_type event_type;
-        uint32_t flags;
-        //deleg_type
-};
-typedef struct _upcall_list upcall_list;
-
-upcall_list u_root;
-pthread_mutex_t     u_mutex; /* mutex for upcall_list */
 
 #define DEFAULT_EVENT_POOL_SIZE           16384
 #define GF_MEMPOOL_COUNT_OF_DICT_T        4096
